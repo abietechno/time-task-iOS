@@ -1,15 +1,25 @@
 @import "tailwindcss";
 
+/* Google Sans Flex is the only member of the "Google Sans" family Google
+   actually licenses for public web embedding (loaded above via the official
+   fonts.googleapis.com — no third-party mirrors). Redefining Tailwind's own
+   `font-sans` token means every `font-sans` utility in the app (including
+   the root wrapper in App.tsx) resolves to it too, not just the elements
+   explicitly tagged `.font-google`. */
+@theme {
+  --font-sans: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
 @layer base {
   :root {
-    font-family: 'Google Sans', 'Google Sans Text', 'Google Sans Flex', 'Product Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    --font-google: 'Google Sans', 'Google Sans Text', 'Product Sans', sans-serif;
-    --font-google-text: 'Google Sans Text', 'Google Sans', sans-serif;
+    font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-google: 'Google Sans Flex', sans-serif;
+    --font-google-text: 'Google Sans Flex', sans-serif;
     -webkit-tap-highlight-color: transparent;
   }
 
   body {
-    font-family: 'Google Sans', 'Google Sans Text', 'Google Sans Flex', 'Product Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, sans-serif;
     background-color: #F2F2F7;
     color: #1C1C1E;
     overflow-x: hidden;
@@ -25,13 +35,14 @@
   }
 }
 
-/* Google Sans utility helpers */
+/* Google Sans Flex utility helpers (kept for the handful of call sites that
+   already reference these class names directly) */
 .font-google {
-  font-family: 'Google Sans', 'Google Sans Text', 'Product Sans', sans-serif;
+  font-family: 'Google Sans Flex', sans-serif;
 }
 
 .font-google-text {
-  font-family: 'Google Sans Text', 'Google Sans', sans-serif;
+  font-family: 'Google Sans Flex', sans-serif;
 }
 
 /* iOS Cupertino Frosted Glass Tokens */
