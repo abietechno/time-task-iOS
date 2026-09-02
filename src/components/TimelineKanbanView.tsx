@@ -9,7 +9,7 @@ import {
   Sliders,
   Filter,
   Plus
-} from 'lucide-react';
+} from './icons';
 import { Task, Project, TaskStatus, TaskPriority } from '../types';
 import { TaskCard } from './TaskCard';
 import { CupertinoSegmentedControl } from './CupertinoSegmentedControl';

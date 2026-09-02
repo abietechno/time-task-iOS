@@ -53,7 +53,7 @@ import {
   Palette,
   Download,
   LogOut,
-} from 'lucide-react';
+} from './components/icons';
 
 export default function App() {
   // Auth: currentUser is null in guest mode, non-null once logged in.

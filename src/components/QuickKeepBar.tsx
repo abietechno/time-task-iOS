@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Pin, Calendar, CheckSquare, Sparkles } from 'lucide-react';
+import { Plus, Pin, Calendar, CheckSquare, Sparkles } from './icons';
 import { Task, Project } from '../types';
 import { getTodayDate } from '../services/storage';
 
