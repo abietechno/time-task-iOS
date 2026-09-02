@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { User as UserIcon, LogOut } from './icons';
+import { User as UserIcon, LogOut } from 'lucide-react';
 import { User } from '../types';
 import {
   signUpWithEmail,

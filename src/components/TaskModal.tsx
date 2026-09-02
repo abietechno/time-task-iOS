@@ -13,7 +13,7 @@ import {
   Tag,
   Sparkles,
   AlertCircle
-} from './icons';
+} from 'lucide-react';
 import { Task, Project, TaskStatus, TaskPriority, Subtask } from '../types';
 import { getTodayDate } from '../services/storage';
 

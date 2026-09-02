@@ -12,7 +12,7 @@ import {
   MoreVertical,
   Trash2,
   Edit3
-} from './icons';
+} from 'lucide-react';
 import { Project, Task } from '../types';
 import { getTodayDate } from '../services/storage';
 

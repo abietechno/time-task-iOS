@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, User as UserIcon, Plus, Moon, Sun } from './icons';
+import { Search, User as UserIcon, Plus, Moon, Sun } from 'lucide-react';
 import { User } from '../types';
 
 interface CupertinoHeaderProps {

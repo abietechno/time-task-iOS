@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Calendar, Layers, FolderKanban, User } from './icons';
+import { CheckSquare, Calendar, Layers, FolderKanban, User } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface CupertinoTabBarProps {

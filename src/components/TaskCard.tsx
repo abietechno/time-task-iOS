@@ -12,7 +12,7 @@ import {
   Trash2,
   Edit3,
   AlertCircle,
-} from './icons';
+} from 'lucide-react';
 import { Task, TaskStatus, TaskPriority } from '../types';
 
 interface TaskCardProps {

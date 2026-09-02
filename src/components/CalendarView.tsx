@@ -11,7 +11,7 @@ import {
   Sliders,
   FolderKanban,
   Check
-} from './icons';
+} from 'lucide-react';
 import { Task, TaskStatus } from '../types';
 import { CupertinoSegmentedControl } from './CupertinoSegmentedControl';
 import { TaskCard } from './TaskCard';
