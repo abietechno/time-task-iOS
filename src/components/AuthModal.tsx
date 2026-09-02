@@ -10,7 +10,7 @@ import {
   firebaseErrorMessage,
 } from '../services/auth';
 import { migrateGuestDataToAccount } from '../services/migration';
-import { clearLocalMirror } from '../services/storage';
+import { clearLocalMirror, getStoredTasks, getStoredProjects } from '../services/storage';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -36,9 +36,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     setErrorMessage('');
     setSuccessMessage('');
 
+    // Snapshot guest data BEFORE signing in — the instant sign-in succeeds,
+    // App.tsx's realtime listener sees the (still-empty) remote data and
+    // overwrites this local mirror, so reading it after sign-in is too late.
+    const guestTasks = getStoredTasks();
+    const guestProjects = getStoredProjects();
+
     try {
       const credential = await signInWithGoogle();
-      const migrated = await migrateGuestDataToAccount(credential.user.uid);
+      const migrated = await migrateGuestDataToAccount(credential.user.uid, guestTasks, guestProjects);
       setSuccessMessage(
         migrated
           ? `Berhasil masuk dengan Google! ${migrated.taskCount} tugas & ${migrated.projectCount} proyek disinkronkan ke cloud.`
@@ -65,12 +71,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
 
     try {
       if (authMode === 'register') {
+        // Snapshot before signing up — see the comment in handleGoogleSignIn.
+        const guestTasks = getStoredTasks();
+        const guestProjects = getStoredProjects();
+
         const credential = await signUpWithEmail(
           email.trim(),
           password,
           name.trim() || email.split('@')[0]
         );
-        const migrated = await migrateGuestDataToAccount(credential.user.uid);
+        const migrated = await migrateGuestDataToAccount(credential.user.uid, guestTasks, guestProjects);
         setSuccessMessage(
           migrated
             ? `Berhasil mendaftar! ${migrated.taskCount} tugas & ${migrated.projectCount} proyek disinkronkan ke cloud.`

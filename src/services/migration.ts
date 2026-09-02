@@ -1,6 +1,6 @@
 import { doc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
-import { getStoredTasks, getStoredProjects } from './storage';
+import type { Task, Project } from '../types';
 
 const MIGRATION_FLAG_KEY = 'ios_timeline_migrated_v1';
 
@@ -11,16 +11,24 @@ export interface MigrationResult {
 
 /**
  * On first successful login/register for a given user on this device, pushes
- * whatever guest data is sitting in local storage up to their new account's
+ * a snapshot of the guest's local tasks/projects up to their new account's
  * Firestore subcollections (users/{uid}/tasks, users/{uid}/projects).
+ *
+ * Callers MUST snapshot the guest data (via getStoredTasks()/getStoredProjects())
+ * *before* signing in — the moment sign-in succeeds, App.tsx's realtime Firestore
+ * listener starts, sees the (still-empty) remote collections, and overwrites the
+ * local storage mirror with that empty result. Reading storage here, after
+ * sign-in, would race that listener and can end up migrating nothing.
+ *
  * Guarded so it only ever runs once per (user, device) pair.
  */
-export async function migrateGuestDataToAccount(userId: string): Promise<MigrationResult | null> {
+export async function migrateGuestDataToAccount(
+  userId: string,
+  tasks: Task[],
+  projects: Project[]
+): Promise<MigrationResult | null> {
   if (!db) return null;
   if (localStorage.getItem(MIGRATION_FLAG_KEY) === userId) return null;
-
-  const tasks = getStoredTasks();
-  const projects = getStoredProjects();
 
   const batch = writeBatch(db);
   // Projects first — tasks.project_id references a project's id.
