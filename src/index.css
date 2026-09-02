@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    font-family: 'Google Sans', 'Google Sans Text', 'Google Sans Flex', 'Product Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-google: 'Google Sans', 'Google Sans Text', 'Product Sans', sans-serif;
+    --font-google-text: 'Google Sans Text', 'Google Sans', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    font-family: 'Google Sans', 'Google Sans Text', 'Google Sans Flex', 'Product Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #F2F2F7;
+    color: #1C1C1E;
+    overflow-x: hidden;
+    touch-action: manipulation;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.015em;
+  }
+
+  input, button, textarea, select {
+    font-family: inherit;
+    letter-spacing: inherit;
+  }
+}
+
+/* Google Sans utility helpers */
+.font-google {
+  font-family: 'Google Sans', 'Google Sans Text', 'Product Sans', sans-serif;
+}
+
+.font-google-text {
+  font-family: 'Google Sans Text', 'Google Sans', sans-serif;
+}
+
+/* iOS Cupertino Frosted Glass Tokens */
+.cupertino-blur {
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
+}
+
+.cupertino-card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.dark .cupertino-card {
+  background: rgba(28, 28, 30, 0.78);
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.35);
+}
+
+/* Inset Grouped iOS List Container */
+.cupertino-grouped-list {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.dark .cupertino-grouped-list {
+  background: rgba(28, 28, 30, 0.75);
+  backdrop-filter: blur(25px) saturate(190%);
+  -webkit-backdrop-filter: blur(25px) saturate(190%);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+/* iOS Cupertino Switch Toggle */
+.cupertino-switch {
+  position: relative;
+  display: inline-block;
+  width: 51px;
+  height: 31px;
+}
+
+.cupertino-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.cupertino-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #E9E9EA;
+  transition: .3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-radius: 34px;
+}
+
+.cupertino-slider:before {
+  position: absolute;
+  content: "";
+  height: 27px;
+  width: 27px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  transition: .3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+input:checked + .cupertino-slider {
+  background-color: #34C759;
+}
+
+input:checked + .cupertino-slider:before {
+  transform: translateX(20px);
+}
+
+/* Custom Cupertino scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* iOS Safe Areas */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1.25rem);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0.75rem);
+}
+
