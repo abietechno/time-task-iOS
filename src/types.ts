@@ -45,16 +45,8 @@ export interface User {
   email: string;
   full_name: string;
   avatar_url: string;
-  provider: 'google' | 'email' | 'guest';
+  provider: 'email' | 'google' | 'guest';
   created_at: string;
-}
-
-export interface SupabaseConfig {
-  url: string;
-  anon_key: string;
-  is_connected: boolean;
-  auto_sync: boolean;
-  last_synced_at?: string;
 }
 
 export type ActiveTab = 'today' | 'timeline' | 'calendar' | 'projects' | 'settings';

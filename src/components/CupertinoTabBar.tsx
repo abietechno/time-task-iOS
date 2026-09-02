@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Calendar, Layers, FolderKanban, Cloud } from 'lucide-react';
+import { CheckSquare, Calendar, Layers, FolderKanban, User } from 'lucide-react';
 import { ActiveTab } from '../types';
 
 interface CupertinoTabBarProps {
@@ -7,7 +7,7 @@ interface CupertinoTabBarProps {
   onTabChange: (tab: ActiveTab) => void;
   onQuickAdd: () => void;
   pendingCount: number;
-  isSupabaseSynced: boolean;
+  isAuthenticated: boolean;
 }
 
 export const CupertinoTabBar: React.FC<CupertinoTabBarProps> = ({
@@ -15,7 +15,7 @@ export const CupertinoTabBar: React.FC<CupertinoTabBarProps> = ({
   onTabChange,
   onQuickAdd,
   pendingCount,
-  isSupabaseSynced,
+  isAuthenticated,
 }) => {
   const tabs = [
     {
@@ -41,9 +41,9 @@ export const CupertinoTabBar: React.FC<CupertinoTabBarProps> = ({
     },
     {
       id: 'settings' as ActiveTab,
-      label: 'Sync & Akun',
-      icon: Cloud,
-      indicator: isSupabaseSynced ? 'green' : 'gray',
+      label: 'Profil',
+      icon: User,
+      indicator: isAuthenticated ? 'green' : 'gray',
     },
   ];
 

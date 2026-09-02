@@ -1,14 +1,13 @@
 import React from 'react';
-import { Cloud, CloudCheck, CloudOff, Search, Sparkles, User as UserIcon, Plus, Moon, Sun } from 'lucide-react';
-import { User, SupabaseConfig } from '../types';
+import { Search, User as UserIcon, Plus, Moon, Sun } from 'lucide-react';
+import { User } from '../types';
 
 interface CupertinoHeaderProps {
   title: string;
   subtitle?: string;
   user: User;
-  supabaseConfig: SupabaseConfig;
+  isGuest: boolean;
   onOpenAuth: () => void;
-  onOpenSync: () => void;
   onQuickAdd: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -21,9 +20,8 @@ export const CupertinoHeader: React.FC<CupertinoHeaderProps> = ({
   title,
   subtitle,
   user,
-  supabaseConfig,
+  isGuest,
   onOpenAuth,
-  onOpenSync,
   onQuickAdd,
   searchQuery,
   onSearchChange,
@@ -48,34 +46,6 @@ export const CupertinoHeader: React.FC<CupertinoHeaderProps> = ({
           <span className="text-[11px] font-semibold text-[#8E8E93] tracking-wider">{dateFormatted}</span>
 
           <div className="flex items-center gap-2">
-            {/* Supabase Status Button */}
-            <button
-              id="header-supabase-sync-btn"
-              onClick={onOpenSync}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-md transition-all active:scale-95 ${
-                supabaseConfig.is_connected
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm'
-                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shadow-sm'
-              }`}
-              title={
-                supabaseConfig.is_connected
-                  ? 'Supabase Terkoneksi (Real-time)'
-                  : 'Supabase Belum Dihubungkan (Lokal)'
-              }
-            >
-              {supabaseConfig.is_connected ? (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                  <span>Supabase Sync</span>
-                </>
-              ) : (
-                <>
-                  <Cloud className="w-3.5 h-3.5" />
-                  <span>Mode Offline</span>
-                </>
-              )}
-            </button>
-
             {/* Theme Dark/Light Mode Quick Toggle */}
             {onToggleDarkMode && (
               <button
@@ -110,7 +80,7 @@ export const CupertinoHeader: React.FC<CupertinoHeaderProps> = ({
                   {user.full_name ? user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'JD'}
                 </span>
               )}
-              {user.provider === 'google' && (
+              {!isGuest && (
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 border-2 border-white dark:border-[#121214] rounded-full" />
               )}
             </button>

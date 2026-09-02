@@ -4,7 +4,6 @@ import {
   Task,
   Project,
   User,
-  SupabaseConfig,
   ActiveTab,
   TaskStatus,
 } from './types';
@@ -15,11 +14,18 @@ import {
   saveStoredProjects,
   getStoredUser,
   saveStoredUser,
-  getStoredSupabaseConfig,
-  saveStoredSupabaseConfig,
-  getSupabaseClient,
+  clearLocalMirror,
   getTodayDate,
 } from './services/storage';
+import { db } from './services/firebase';
+import { useAuthSession } from './services/auth';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+} from 'firebase/firestore';
 
 import { CupertinoTabBar } from './components/CupertinoTabBar';
 import { CupertinoHeader } from './components/CupertinoHeader';
@@ -30,7 +36,6 @@ import { CalendarView } from './components/CalendarView';
 import { TimelineKanbanView } from './components/TimelineKanbanView';
 import { ProjectsView } from './components/ProjectsView';
 import { QuickKeepBar } from './components/QuickKeepBar';
-import { SupabaseSyncModal } from './components/SupabaseSyncModal';
 import { AuthModal } from './components/AuthModal';
 
 import {
@@ -45,15 +50,33 @@ import {
   Inbox,
   Moon,
   Sun,
-  Palette
+  Palette,
+  Download,
+  LogOut,
 } from 'lucide-react';
 
 export default function App() {
+  // Auth: currentUser is null in guest mode, non-null once logged in.
+  const { currentUser } = useAuthSession();
+  const isGuest = !currentUser;
+
   // Global States
   const [tasks, setTasks] = useState<Task[]>(getStoredTasks);
   const [projects, setProjects] = useState<Project[]>(getStoredProjects);
-  const [user, setUser] = useState<User>(getStoredUser);
-  const [supabaseConfig, setSupabaseConfig] = useState<SupabaseConfig>(getStoredSupabaseConfig);
+  const [guestUser, setGuestUser] = useState<User>(getStoredUser);
+
+  // Displayed user: derived from the real Firebase user when logged in,
+  // else the local guest profile (unchanged demo identity).
+  const user: User = currentUser
+    ? {
+        id: currentUser.uid,
+        email: currentUser.email ?? '',
+        full_name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Pengguna',
+        avatar_url: currentUser.photoURL || '',
+        provider: currentUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'email',
+        created_at: currentUser.metadata.creationTime ?? new Date().toISOString(),
+      }
+    : guestUser;
 
   // Navigation & Filter States
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
@@ -64,7 +87,6 @@ export default function App() {
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [defaultTaskDate, setDefaultTaskDate] = useState<string>(getTodayDate());
-  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Dark mode state: default to system preference or stored setting
@@ -89,7 +111,7 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Sync to local storage on changes
+  // Sync to local storage on changes — this is the offline mirror once logged in.
   useEffect(() => {
     saveStoredTasks(tasks);
   }, [tasks]);
@@ -99,53 +121,33 @@ export default function App() {
   }, [projects]);
 
   useEffect(() => {
-    saveStoredUser(user);
-  }, [user]);
+    if (isGuest) saveStoredUser(guestUser);
+  }, [guestUser, isGuest]);
 
+  // Firestore realtime listeners, scoped to the logged-in user's own
+  // subcollections (users/{uid}/tasks, users/{uid}/projects). onSnapshot
+  // delivers the initial data AND every live update afterwards in one go —
+  // Firestore is the source of truth once logged in; local storage stays as
+  // an offline mirror (see the save effects above).
   useEffect(() => {
-    saveStoredSupabaseConfig(supabaseConfig);
-  }, [supabaseConfig]);
+    if (!db || !currentUser) return;
+    const uid = currentUser.uid;
 
-  // Supabase Real-time Listener (if connected)
-  useEffect(() => {
-    if (!supabaseConfig.is_connected) return;
+    const unsubTasks = onSnapshot(collection(db, 'users', uid, 'tasks'), (snapshot) => {
+      setTasks(snapshot.docs.map((d) => d.data() as Task));
+    });
+    const unsubProjects = onSnapshot(collection(db, 'users', uid, 'projects'), (snapshot) => {
+      setProjects(snapshot.docs.map((d) => d.data() as Project));
+    });
 
-    const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-    if (!client) return;
+    return () => {
+      unsubTasks();
+      unsubProjects();
+    };
+  }, [currentUser?.uid]);
 
-    // Realtime channel subscription for tasks
-    try {
-      const channel = client
-        .channel('schema-db-changes')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'tasks' },
-          (payload) => {
-            if (payload.eventType === 'INSERT') {
-              setTasks((prev) => {
-                if (prev.some((t) => t.id === payload.new.id)) return prev;
-                return [payload.new as Task, ...prev];
-              });
-            } else if (payload.eventType === 'UPDATE') {
-              setTasks((prev) =>
-                prev.map((t) => (t.id === payload.new.id ? (payload.new as Task) : t))
-              );
-            } else if (payload.eventType === 'DELETE') {
-              setTasks((prev) => prev.filter((t) => t.id === payload.old.id));
-            }
-          }
-        )
-        .subscribe();
-
-      return () => {
-        client.removeChannel(channel);
-      };
-    } catch (e) {
-      console.error('Supabase realtime listener setup failed', e);
-    }
-  }, [supabaseConfig.is_connected, supabaseConfig.url, supabaseConfig.anon_key]);
-
-  // Task Actions
+  // Task Actions — push to Firestore only when logged in; in guest mode this
+  // is byte-for-byte the original local-only behavior.
   const handleSaveTask = async (task: Task) => {
     setTasks((prev) => {
       const index = prev.findIndex((t) => t.id === task.id);
@@ -157,34 +159,24 @@ export default function App() {
       return [task, ...prev];
     });
 
-    // If Supabase is connected, background push
-    if (supabaseConfig.is_connected) {
-      const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-      if (client) {
-        client.from('tasks').upsert(task).then();
-      }
+    if (db && currentUser) {
+      setDoc(doc(db, 'users', currentUser.uid, 'tasks', task.id), task);
     }
   };
 
   const handleUpdateTask = (updatedTask: Task) => {
     setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
 
-    if (supabaseConfig.is_connected) {
-      const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-      if (client) {
-        client.from('tasks').upsert(updatedTask).then();
-      }
+    if (db && currentUser) {
+      setDoc(doc(db, 'users', currentUser.uid, 'tasks', updatedTask.id), updatedTask);
     }
   };
 
   const handleDeleteTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
-    if (supabaseConfig.is_connected) {
-      const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-      if (client) {
-        client.from('tasks').delete().eq('id', taskId).then();
-      }
+    if (db && currentUser) {
+      deleteDoc(doc(db, 'users', currentUser.uid, 'tasks', taskId));
     }
   };
 
@@ -203,35 +195,37 @@ export default function App() {
     );
   };
 
-  // Project Actions
+  // Project Actions — same session-gated pattern as tasks above.
   const handleAddProject = (project: Project) => {
     setProjects((prev) => [project, ...prev]);
-    if (supabaseConfig.is_connected) {
-      const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-      if (client) {
-        client.from('projects').insert(project).then();
-      }
+    if (db && currentUser) {
+      setDoc(doc(db, 'users', currentUser.uid, 'projects', project.id), project);
     }
   };
 
   const handleUpdateProject = (updatedProj: Project) => {
     setProjects((prev) => prev.map((p) => (p.id === updatedProj.id ? updatedProj : p)));
-    if (supabaseConfig.is_connected) {
-      const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-      if (client) {
-        client.from('projects').upsert(updatedProj).then();
-      }
+    if (db && currentUser) {
+      setDoc(doc(db, 'users', currentUser.uid, 'projects', updatedProj.id), updatedProj);
     }
   };
 
   const handleDeleteProject = (projectId: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    if (supabaseConfig.is_connected) {
-      const client = getSupabaseClient(supabaseConfig.url, supabaseConfig.anon_key);
-      if (client) {
-        client.from('projects').delete().eq('id', projectId).then();
-      }
+    if (db && currentUser) {
+      deleteDoc(doc(db, 'users', currentUser.uid, 'projects', projectId));
     }
+  };
+
+  const handleExportJSON = () => {
+    const backupData = { exported_at: new Date().toISOString(), tasks, projects };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `timeline_tasks_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(downloadUrl);
   };
 
   // Filter tasks for Today/Tasks tab
@@ -284,8 +278,8 @@ export default function App() {
         };
       case 'settings':
         return {
-          title: 'Sync & Akun',
-          subtitle: 'Pengaturan cloud database Supabase & Autentikasi',
+          title: 'Profil Saya',
+          subtitle: isGuest ? 'Mode Tamu — data tersimpan lokal di perangkat ini' : `Masuk sebagai ${user.email}`,
         };
       default:
         return { title: 'Timeline & Task iOS', subtitle: '' };
@@ -308,9 +302,8 @@ export default function App() {
           title={headerInfo.title}
           subtitle={headerInfo.subtitle}
           user={user}
-          supabaseConfig={supabaseConfig}
+          isGuest={isGuest}
           onOpenAuth={() => setIsAuthModalOpen(true)}
-          onOpenSync={() => setIsSyncModalOpen(true)}
           onQuickAdd={() => {
             setTaskToEdit(null);
             setDefaultTaskDate(getTodayDate());
@@ -556,7 +549,7 @@ export default function App() {
                     </h3>
                     <p className="text-xs text-[#8E8E93]">{user.email}</p>
                     <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#007AFF]/10 text-[#007AFF] dark:bg-blue-950/40 dark:text-blue-300">
-                      Login via {user.provider === 'google' ? 'Google' : user.provider}
+                      {isGuest ? 'Mode Tamu' : 'Akun Tersinkron'}
                     </span>
                   </div>
                 </div>
@@ -565,7 +558,7 @@ export default function App() {
                   onClick={() => setIsAuthModalOpen(true)}
                   className="px-3.5 py-1.5 bg-[#007AFF]/10 hover:bg-[#007AFF]/20 text-[#007AFF] rounded-full text-xs font-bold transition-all active:scale-95"
                 >
-                  Ganti Akun
+                  {isGuest ? 'Masuk / Daftar' : 'Kelola Akun'}
                 </button>
               </div>
 
@@ -612,44 +605,62 @@ export default function App() {
                 </div>
               </div>
 
-              {/* iOS Inset Group 3: Supabase Cloud Sync Hub */}
-              <div className="cupertino-grouped-list p-4 space-y-3">
-                <div className="flex items-center justify-between">
+              {/* iOS Inset Group 3: Account identity (guest CTA vs logged-in) */}
+              {isGuest ? (
+                <div className="cupertino-grouped-list p-4 space-y-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-8 h-8 rounded-xl bg-[#34C759]/15 text-[#34C759] flex items-center justify-center border border-[#34C759]/20">
                       <Cloud className="w-4 h-4" />
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-[#1C1C1E] dark:text-white font-google">
-                        Integrasi Cloud Supabase
+                        Simpan Data ke Cloud
                       </h3>
-                      <p className="text-[11px] text-[#8E8E93]">Database PostgreSQL & Real-time</p>
+                      <p className="text-[11px] text-[#8E8E93]">Data saat ini hanya tersimpan di perangkat ini</p>
                     </div>
                   </div>
 
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                      supabaseConfig.is_connected
-                        ? 'bg-[#34C759]/15 text-[#34C759] border border-[#34C759]/20'
-                        : 'bg-[#FF9500]/15 text-[#FF9500] border border-[#FF9500]/20'
-                    }`}
+                  <p className="text-xs text-[#8E8E93] leading-relaxed">
+                    Daftar akun gratis supaya tugas & proyek Anda tersimpan aman di cloud, dan bisa diakses dari perangkat lain.
+                  </p>
+
+                  <button
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="w-full py-2.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white rounded-full text-xs font-bold transition-all shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5"
                   >
-                    {supabaseConfig.is_connected ? 'Tersinkron' : 'Offline'}
-                  </span>
+                    <Cloud className="w-4 h-4" />
+                    <span>Daftar Sekarang</span>
+                  </button>
                 </div>
+              ) : (
+                <div className="cupertino-grouped-list p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-[#34C759]/15 text-[#34C759] flex items-center justify-center border border-[#34C759]/20">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[#1C1C1E] dark:text-white font-google">
+                          Akun Cloud Aktif
+                        </h3>
+                        <p className="text-[11px] text-[#8E8E93]">{user.email}</p>
+                      </div>
+                    </div>
+                  </div>
 
-                <p className="text-xs text-[#8E8E93] leading-relaxed">
-                  Hubungkan dengan database Supabase Anda untuk sinkronisasi multi-perangkat seketika, autentikasi Google/Email, dan pencadangan otomatis.
-                </p>
+                  <p className="text-xs text-[#8E8E93] leading-relaxed">
+                    Tugas & proyek Anda otomatis tersinkron ke cloud secara real-time.
+                  </p>
 
-                <button
-                  onClick={() => setIsSyncModalOpen(true)}
-                  className="w-full py-2.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-[0.98] text-white rounded-full text-xs font-bold transition-all shadow-md shadow-blue-500/25 flex items-center justify-center gap-1.5"
-                >
-                  <Cloud className="w-4 h-4" />
-                  <span>Buka Pengaturan Supabase & SQL Schema</span>
-                </button>
-              </div>
+                  <button
+                    onClick={() => setIsAuthModalOpen(true)}
+                    className="w-full py-2.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-full text-xs font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Keluar</span>
+                  </button>
+                </div>
+              )}
 
               {/* iOS Inset Group 3: Statistics & App Info */}
               <div className="cupertino-grouped-list p-4 space-y-2 text-xs">
@@ -664,10 +675,18 @@ export default function App() {
                   <span>Total Proyek Aktif</span>
                   <span className="font-bold text-[#1C1C1E] dark:text-white">{projects.length} proyek</span>
                 </div>
-                <div className="flex justify-between py-2 text-[#8E8E93]">
+                <div className="flex justify-between py-2 border-b border-black/5 dark:border-white/5 text-[#8E8E93]">
                   <span>Desain UI/UX & Tipografi</span>
                   <span className="font-bold text-[#007AFF]">iOS Cupertino + Google Sans</span>
                 </div>
+
+                <button
+                  onClick={handleExportJSON}
+                  className="w-full mt-1 py-2.5 bg-[#F2F2F7] dark:bg-[#2C2C2E] hover:bg-black/5 dark:hover:bg-white/10 text-[#1C1C1E] dark:text-white rounded-full text-xs font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh Cadangan Data (JSON)</span>
+                </button>
               </div>
             </motion.div>
           )}
@@ -684,7 +703,7 @@ export default function App() {
           setIsTaskModalOpen(true);
         }}
         pendingCount={pendingTasksCount}
-        isSupabaseSynced={supabaseConfig.is_connected}
+        isAuthenticated={!isGuest}
       />
 
       {/* Modals */}
@@ -697,25 +716,11 @@ export default function App() {
         defaultDate={defaultTaskDate}
       />
 
-      <SupabaseSyncModal
-        isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
-        config={supabaseConfig}
-        onSaveConfig={setSupabaseConfig}
-        tasks={tasks}
-        projects={projects}
-        onImportData={(importedTasks, importedProjects) => {
-          setTasks(importedTasks);
-          setProjects(importedProjects);
-        }}
-      />
-
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         currentUser={user}
-        onUpdateUser={setUser}
-        supabaseConfig={supabaseConfig}
+        isGuest={isGuest}
       />
     </div>
   );

@@ -1,12 +1,12 @@
-import { Task, Project, User, SupabaseConfig } from '../types';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Task, Project, User } from '../types';
 
 const STORAGE_KEYS = {
   TASKS: 'ios_timeline_tasks_v1',
   PROJECTS: 'ios_timeline_projects_v1',
   USER: 'ios_timeline_user_v1',
-  SUPABASE_CONFIG: 'ios_timeline_supabase_cfg_v1',
 };
+
+const MIGRATION_FLAG_KEY = 'ios_timeline_migrated_v1';
 
 // Helper: Format today as YYYY-MM-DD
 export const getTodayDate = (): string => {
@@ -40,8 +40,8 @@ export const INITIAL_PROJECTS: Project[] = [
   },
   {
     id: 'proj-2',
-    name: 'Sinkronisasi Backend & Supabase',
-    description: 'Setup database PostgreSQL, autentikasi Google/Email, dan webhook realtime sync.',
+    name: 'Sinkronisasi Backend & Firebase',
+    description: 'Setup database Firestore, autentikasi Email, dan realtime sync.',
     color: '#34C759', // iOS System Green
     icon: 'database',
     start_date: getRelativeDate(-2),
@@ -88,10 +88,10 @@ export const INITIAL_TASKS: Task[] = [
   },
   {
     id: 'task-2',
-    title: 'Setup Database Supabase & Tabel Tasks',
-    description: 'Buat skema SQL tabel projects dan tasks dengan Row Level Security (RLS) serta trigger updated_at.',
+    title: 'Setup Firestore & Koleksi Tasks',
+    description: 'Buat struktur koleksi projects dan tasks dengan Security Rules per-user serta timestamp updated_at.',
     project_id: 'proj-2',
-    project_name: 'Sinkronisasi Backend & Supabase',
+    project_name: 'Sinkronisasi Backend & Firebase',
     status: 'in_progress',
     priority: 'urgent',
     due_date: getTodayDate(),
@@ -99,11 +99,11 @@ export const INITIAL_TASKS: Task[] = [
     start_date: getTodayDate(),
     progress: 40,
     subtasks: [
-      { id: 'sub-4', title: 'Tulis skrip DDL SQL untuk Supabase Editor', completed: true },
-      { id: 'sub-5', title: 'Integrasikan Supabase JS Client di web', completed: false },
-      { id: 'sub-6', title: 'Uji Google OAuth & Email Login sync', completed: false },
+      { id: 'sub-4', title: 'Tulis Firestore Security Rules', completed: true },
+      { id: 'sub-5', title: 'Integrasikan Firebase JS SDK di web', completed: false },
+      { id: 'sub-6', title: 'Uji Email Login & sinkronisasi', completed: false },
     ],
-    tags: ['Backend', 'Supabase', 'Database'],
+    tags: ['Backend', 'Firebase', 'Database'],
     color: 'green',
     pinned: true,
     created_at: new Date().toISOString(),
@@ -178,11 +178,11 @@ export const INITIAL_TASKS: Task[] = [
 ];
 
 export const INITIAL_USER: User = {
-  id: 'usr-1',
-  email: 'bagusboss.hd@gmail.com',
-  full_name: 'Bagus Boss',
-  avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  provider: 'google',
+  id: 'usr-guest',
+  email: 'tamu@timeline.app',
+  full_name: 'Pengguna Tamu',
+  avatar_url: '',
+  provider: 'guest',
   created_at: new Date().toISOString(),
 };
 
@@ -240,109 +240,14 @@ export const saveStoredUser = (user: User): void => {
   localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
 };
 
-export const getStoredSupabaseConfig = (): SupabaseConfig => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.SUPABASE_CONFIG);
-    if (!raw) {
-      const defaultCfg: SupabaseConfig = {
-        url: '',
-        anon_key: '',
-        is_connected: false,
-        auto_sync: false,
-      };
-      return defaultCfg;
-    }
-    return JSON.parse(raw);
-  } catch (e) {
-    return {
-      url: '',
-      anon_key: '',
-      is_connected: false,
-      auto_sync: false,
-    };
-  }
+/** Wipes the local tasks/projects/user mirror — used on sign-out so a shared
+ * device doesn't keep showing the previous account's data. */
+export const clearLocalMirror = (): void => {
+  localStorage.removeItem(STORAGE_KEYS.TASKS);
+  localStorage.removeItem(STORAGE_KEYS.PROJECTS);
+  localStorage.removeItem(STORAGE_KEYS.USER);
 };
 
-export const saveStoredSupabaseConfig = (cfg: SupabaseConfig): void => {
-  localStorage.setItem(STORAGE_KEYS.SUPABASE_CONFIG, JSON.stringify(cfg));
-};
-
-// Supabase Client Helper
-let supabaseClientInstance: SupabaseClient | null = null;
-
-export const getSupabaseClient = (url?: string, key?: string): SupabaseClient | null => {
-  const currentCfg = getStoredSupabaseConfig();
-  const targetUrl = url || currentCfg.url;
-  const targetKey = key || currentCfg.anon_key;
-
-  if (!targetUrl || !targetKey) return null;
-
-  try {
-    if (!supabaseClientInstance || url || key) {
-      supabaseClientInstance = createClient(targetUrl, targetKey);
-    }
-    return supabaseClientInstance;
-  } catch (e) {
-    console.error('Supabase initialization failed', e);
-    return null;
-  }
-};
-
-// SQL Schema Generator for Supabase
-export const getSupabaseSQLSchema = (): string => {
-  return `-- ==========================================
--- SQL SETUP UNTUK SUPABASE DATABASE
--- Jalankan skrip ini di SQL Editor Supabase Anda
--- ==========================================
-
--- 1. Buat tabel Projects
-CREATE TABLE IF NOT EXISTS public.projects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    color TEXT DEFAULT '#007AFF',
-    icon TEXT DEFAULT 'layout',
-    start_date DATE,
-    deadline DATE,
-    status TEXT DEFAULT 'active',
-    client TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 2. Buat tabel Tasks
-CREATE TABLE IF NOT EXISTS public.tasks (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT,
-    project_id TEXT REFERENCES public.projects(id) ON DELETE SET NULL,
-    project_name TEXT,
-    status TEXT DEFAULT 'todo', -- 'todo', 'in_progress', 'review', 'done'
-    priority TEXT DEFAULT 'medium', -- 'low', 'medium', 'high', 'urgent'
-    due_date DATE NOT NULL,
-    due_time TEXT,
-    start_date DATE,
-    progress INTEGER DEFAULT 0,
-    subtasks JSONB DEFAULT '[]'::jsonb,
-    tags JSONB DEFAULT '[]'::jsonb,
-    color TEXT DEFAULT 'blue',
-    pinned BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 3. Aktifkan Row Level Security (RLS)
-ALTER TABLE public.projects ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
-
--- 4. Buat Policy untuk Public Access (atau sesuaikan dengan auth.uid())
-CREATE POLICY "Allow anonymous read projects" ON public.projects FOR SELECT USING (true);
-CREATE POLICY "Allow anonymous insert/update projects" ON public.projects FOR ALL USING (true);
-
-CREATE POLICY "Allow anonymous read tasks" ON public.tasks FOR SELECT USING (true);
-CREATE POLICY "Allow anonymous insert/update tasks" ON public.tasks FOR ALL USING (true);
-
--- 5. Aktifkan Realtime Replication untuk sinkronisasi seketika
-ALTER PUBLICATION supabase_realtime ADD TABLE public.projects;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.tasks;
-`;
+export const clearGuestMigrationFlag = (): void => {
+  localStorage.removeItem(MIGRATION_FLAG_KEY);
 };
