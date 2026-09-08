@@ -88,20 +88,20 @@ export const CupertinoHeader: React.FC<CupertinoHeaderProps> = ({
         </div>
 
         {/* Big Navigation Title Row */}
-        <div className="flex items-center justify-between mt-1.5">
+        <div className="flex items-center justify-between mt-2">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-[#1C1C1E] dark:text-white font-google">
+            <h1 className="text-[28px] leading-[1.15] font-extrabold tracking-tight text-[#1C1C1E] dark:text-white font-google">
               {title}
             </h1>
             {subtitle && (
-              <p className="text-xs font-medium text-[#8E8E93] mt-0.5">{subtitle}</p>
+              <p className="text-[13px] font-medium text-[#8E8E93] mt-1">{subtitle}</p>
             )}
           </div>
 
           <button
             id="header-quick-add-btn"
             onClick={onQuickAdd}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#007AFF] hover:bg-[#0062CC] active:scale-95 text-white font-bold text-xs rounded-full shadow-lg shadow-blue-500/25 transition-all"
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-[#007AFF] hover:bg-[#0062CC] active:scale-95 text-white font-bold text-[13px] rounded-full shadow-lg shadow-blue-500/25 transition-all"
           >
             <Plus className="w-4 h-4 stroke-[2.5]" />
             <span>Tugas Baru</span>
@@ -118,7 +118,7 @@ export const CupertinoHeader: React.FC<CupertinoHeaderProps> = ({
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder="Cari tugas, timeline, catatan, tag..."
-              className="w-full pl-9 pr-8 py-2 bg-white/60 dark:bg-[#2C2C2E]/60 backdrop-blur-md border border-white/50 dark:border-white/10 text-[#1C1C1E] dark:text-white placeholder-[#8E8E93] text-sm rounded-2xl outline-none focus:ring-2 focus:ring-[#007AFF]/40 shadow-sm transition-all"
+              className="w-full pl-9 pr-8 py-2.5 bg-white/60 dark:bg-[#2C2C2E]/60 backdrop-blur-md border border-white/50 dark:border-white/10 text-[#1C1C1E] dark:text-white placeholder-[#8E8E93] text-[14px] font-medium rounded-2xl outline-none focus:ring-2 focus:ring-[#007AFF]/40 shadow-sm transition-all"
             />
             {searchQuery && (
               <button

@@ -73,16 +73,16 @@ export const TimelineKanbanView: React.FC<TimelineKanbanViewProps> = ({
               <Layers className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#1C1C1E] dark:text-white font-google">
+              <h2 className="text-[17px] font-extrabold tracking-tight text-[#1C1C1E] dark:text-white font-google">
                 Ringkasan Timeline Jobs
               </h2>
-              <p className="text-xs font-medium text-[#8E8E93]">
+              <p className="text-[13px] font-medium text-[#8E8E93] mt-0.5">
                 {completedTasks} dari {totalTasks} tugas telah diselesaikan
               </p>
             </div>
           </div>
           <div className="text-right">
-            <span className="text-2xl font-extrabold text-[#007AFF] font-google tracking-tight">
+            <span className="text-[32px] font-extrabold text-[#007AFF] font-google tracking-tight leading-none">
               {overallProgress}%
             </span>
             <span className="block text-[9px] text-[#8E8E93] font-bold uppercase tracking-wider">TOTAL PROGRES</span>

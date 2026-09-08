@@ -122,10 +122,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
         {/* Month Title & Month Navigators */}
         <div className="flex items-center justify-between mb-3 px-1">
           <div>
-            <h2 className="text-lg font-bold text-[#1C1C1E] dark:text-white font-jakarta">
+            <h2 className="text-xl font-extrabold tracking-tight text-[#1C1C1E] dark:text-white font-google">
               {monthNames[month]} {year}
             </h2>
-            <p className="text-xs font-medium text-[#8E8E93]">
+            <p className="text-[13px] font-medium text-[#8E8E93] mt-0.5">
               {tasks.filter((t) => t.due_date.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`)).length} tugas & jobs di bulan ini
             </p>
           </div>
@@ -241,7 +241,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <CalendarIcon className="w-4 h-4 text-[#007AFF]" />
-              <h3 className="text-sm font-bold text-[#1C1C1E] dark:text-white font-jakarta">
+              <h3 className="text-[15px] font-bold text-[#1C1C1E] dark:text-white font-google">
                 {formattedSelectedDate}
               </h3>
             </div>

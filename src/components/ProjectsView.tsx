@@ -105,10 +105,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
       {/* Header with Project Count & Add button */}
       <div className="flex items-center justify-between px-1">
         <div>
-          <h2 className="text-lg font-bold text-[#1C1C1E] dark:text-white font-google">
+          <h2 className="text-[22px] font-extrabold tracking-tight text-[#1C1C1E] dark:text-white font-google">
             Daftar Proyek & Jobs
           </h2>
-          <p className="text-xs text-[#8E8E93]">
+          <p className="text-[13px] text-[#8E8E93] mt-0.5">
             {projects.length} proyek aktif dengan timeline terintegrasi
           </p>
         </div>
@@ -146,7 +146,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                   </div>
 
                   <div>
-                    <h3 className="text-base font-bold text-[#1C1C1E] dark:text-white font-google">
+                    <h3 className="text-[17px] font-bold tracking-tight text-[#1C1C1E] dark:text-white font-google">
                       {proj.name}
                     </h3>
                     {proj.client && (
