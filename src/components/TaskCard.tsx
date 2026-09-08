@@ -54,7 +54,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
   const isDone = task.status === 'done';
   const accent = ACCENT[task.color] || ACCENT.default;
-  const cardBg = task.pinned ? HIGHLIGHT_BG[task.color] || HIGHLIGHT_BG.default : 'bg-white dark:bg-[#1C1C1E]';
+  const cardBg = HIGHLIGHT_BG[task.color] || HIGHLIGHT_BG.default;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const isToday = task.due_date === todayStr;
@@ -132,89 +132,92 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         isDone ? 'opacity-60' : ''
       }`}
     >
-      {/* Top row: date/time + pin + menu (minimal, no badges) */}
+      {/* Top row: colored dot + time (left), overflow menu (right) */}
       <div className="flex items-center justify-between mb-2.5">
         <span
-          className={`flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide ${
+          className={`flex items-center gap-1.5 text-[11px] font-bold ${
             isOverdue ? 'text-rose-500' : isToday ? 'text-[#FF9500]' : 'text-[#8E8E93]'
           }`}
         >
-          {isOverdue && <AlertCircle className="w-3 h-3" />}
+          {isOverdue ? (
+            <AlertCircle className="w-3 h-3" />
+          ) : (
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: accent }} />
+          )}
           {isToday ? 'Hari Ini' : task.due_date}
           {task.due_time && ` · ${task.due_time}`}
         </span>
 
-        <div className="flex items-center gap-0.5">
+        <div className="relative">
           <button
-            id={`pin-task-${task.id}`}
-            onClick={handlePinToggle}
-            className={`p-1.5 rounded-full transition-colors ${
-              task.pinned ? 'text-[#FF9500]' : 'text-[#C7C7CC] hover:text-[#8E8E93]'
-            }`}
-            title={task.pinned ? 'Lepas Sematan' : 'Sematkan'}
+            id={`menu-task-${task.id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className="p-1.5 -m-1.5 text-[#C7C7CC] hover:text-[#8E8E93] rounded-full transition-colors"
           >
-            <Pin className="w-3.5 h-3.5" fill={task.pinned ? 'currentColor' : 'none'} />
+            <MoreHorizontal className="w-3.5 h-3.5" />
           </button>
 
-          <div className="relative">
-            <button
-              id={`menu-task-${task.id}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMenu(!showMenu);
-              }}
-              className="p-1.5 text-[#C7C7CC] hover:text-[#8E8E93] rounded-full transition-colors"
-            >
-              <MoreHorizontal className="w-3.5 h-3.5" />
-            </button>
-
-            {showMenu && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
+          {showMenu && (
+            <>
+              <div
+                className="fixed inset-0 z-40"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                }}
+              />
+              <div className="absolute right-0 top-8 z-50 w-40 py-1 bg-white dark:bg-[#2C2C2E] rounded-2xl shadow-xl border border-black/10 dark:border-white/10 text-sm text-[#1C1C1E] dark:text-white overflow-hidden">
+                <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowMenu(false);
+                    onEdit(task);
                   }}
-                />
-                <div className="absolute right-0 top-8 z-50 w-36 py-1 bg-white dark:bg-[#2C2C2E] rounded-2xl shadow-xl border border-black/10 dark:border-white/10 text-sm text-[#1C1C1E] dark:text-white overflow-hidden">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMenu(false);
-                      onEdit(task);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-white/10 text-left"
-                  >
-                    <Edit3 className="w-4 h-4 text-blue-500" />
-                    <span>Edit</span>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMenu(false);
-                      onDelete(task.id);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-left"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    <span>Hapus</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
+                  className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                >
+                  <Edit3 className="w-4 h-4 text-blue-500" />
+                  <span>Edit</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    handlePinToggle(e);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                >
+                  <Pin className="w-4 h-4 text-[#FF9500]" fill={task.pinned ? 'currentColor' : 'none'} />
+                  <span>{task.pinned ? 'Lepas Sematan' : 'Sematkan'}</span>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                    onDelete(task.id);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-left"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Hapus</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Title + description */}
       <div onClick={() => onEdit(task)} className="cursor-pointer">
         <h3
-          className={`text-[17px] font-extrabold tracking-tight leading-snug transition-all ${
+          className={`flex items-center gap-1.5 text-[17px] font-extrabold tracking-tight leading-snug transition-all ${
             isDone ? 'line-through text-[#8E8E93]' : 'text-[#1C1C1E] dark:text-white'
           }`}
         >
-          {task.title}
+          {task.pinned && <Pin className="w-3.5 h-3.5 text-[#FF9500] flex-shrink-0" fill="currentColor" />}
+          <span className="truncate">{task.title}</span>
         </h3>
 
         {task.description && (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import {
   X,
   Check,
@@ -9,10 +9,6 @@ import {
   Clock,
   Pin,
   FolderKanban,
-  Sliders,
-  Tag,
-  Sparkles,
-  AlertCircle
 } from 'lucide-react';
 import { Task, Project, TaskStatus, TaskPriority, Subtask } from '../types';
 import { getTodayDate } from '../services/storage';
@@ -27,13 +23,19 @@ interface TaskModalProps {
 }
 
 const COLOR_OPTIONS = [
-  { id: 'blue', name: 'Biru iOS', class: 'bg-[#007AFF]' },
-  { id: 'green', name: 'Hijau Sukses', class: 'bg-[#34C759]' },
-  { id: 'purple', name: 'Ungu Kreatif', class: 'bg-[#AF52DE]' },
-  { id: 'orange', name: 'Oranye Job', class: 'bg-[#FF9500]' },
-  { id: 'red', name: 'Merah Urgent', class: 'bg-[#FF3B30]' },
-  { id: 'yellow', name: 'Kuning Catatan', class: 'bg-[#EAB308]' },
-  { id: 'default', name: 'Netral', class: 'bg-[#8E8E93]' },
+  { id: 'blue', class: 'bg-[#007AFF]' },
+  { id: 'green', class: 'bg-[#34C759]' },
+  { id: 'purple', class: 'bg-[#AF52DE]' },
+  { id: 'orange', class: 'bg-[#FF9500]' },
+  { id: 'red', class: 'bg-[#FF3B30]' },
+  { id: 'yellow', class: 'bg-[#EAB308]' },
+];
+
+const STATUS_OPTIONS: { id: TaskStatus; label: string }[] = [
+  { id: 'todo', label: 'To Do' },
+  { id: 'in_progress', label: 'Berjalan' },
+  { id: 'review', label: 'Review' },
+  { id: 'done', label: 'Selesai' },
 ];
 
 export const TaskModal: React.FC<TaskModalProps> = ({
@@ -56,8 +58,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [pinned, setPinned] = useState<boolean>(false);
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtaskText, setNewSubtaskText] = useState('');
-  const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
 
   useEffect(() => {
     if (taskToEdit) {
@@ -72,7 +72,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setColor(taskToEdit.color || 'blue');
       setPinned(taskToEdit.pinned || false);
       setSubtasks(taskToEdit.subtasks || []);
-      setTags(taskToEdit.tags || []);
     } else {
       setTitle('');
       setDescription('');
@@ -85,11 +84,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setColor('blue');
       setPinned(false);
       setSubtasks([]);
-      setTags(['Proyek']);
     }
   }, [taskToEdit, defaultDate, isOpen, projects]);
 
   if (!isOpen) return null;
+
+  const handleStatusChange = (id: TaskStatus) => {
+    setStatus(id);
+    if (id === 'done') setProgress(100);
+    else if (id === 'todo') setProgress(0);
+    else if (progress === 0 || progress === 100) setProgress(50);
+  };
 
   const handleAddSubtask = () => {
     if (!newSubtaskText.trim()) return;
@@ -111,7 +116,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       s.id === id ? { ...s, completed: !s.completed } : s
     );
     setSubtasks(updated);
-    // Recalculate progress if appropriate
     const doneCount = updated.filter((s) => s.completed).length;
     if (updated.length > 0) {
       const calcProgress = Math.round((doneCount / updated.length) * 100);
@@ -119,18 +123,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       if (calcProgress === 100) setStatus('done');
       else if (calcProgress > 0 && status === 'todo') setStatus('in_progress');
     }
-  };
-
-  const handleAddTag = () => {
-    const trimmed = tagInput.trim().replace(/^#/, '');
-    if (trimmed && !tags.includes(trimmed)) {
-      setTags([...tags, trimmed]);
-      setTagInput('');
-    }
-  };
-
-  const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -151,7 +143,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       due_time: dueTime,
       progress,
       subtasks,
-      tags,
+      tags: taskToEdit?.tags || [],
       color,
       pinned,
       created_at: taskToEdit ? taskToEdit.created_at : new Date().toISOString(),
@@ -169,242 +161,199 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         animate={{ y: 0, opacity: 1 }}
         exit={{ y: '100%', opacity: 0 }}
         transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-        className="w-full max-w-lg max-h-[92vh] flex flex-col backdrop-blur-2xl bg-white/90 dark:bg-[#1C1C1E]/90 rounded-t-[32px] sm:rounded-[36px] shadow-2xl border border-white/60 dark:border-white/10 overflow-hidden"
+        className="w-full max-w-lg max-h-[92vh] flex flex-col bg-white dark:bg-[#1C1C1E] rounded-t-[32px] sm:rounded-[36px] shadow-2xl overflow-hidden"
       >
         {/* iOS Grabber handle */}
         <div className="flex justify-center pt-3 pb-1 sm:hidden">
           <div className="w-10 h-1 bg-[#C7C7CC] dark:bg-[#3A3A3C] rounded-full" />
         </div>
 
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-black/5 dark:border-white/5">
+        {/* Header Bar — minimal: close, title, pin */}
+        <div className="flex items-center justify-between px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="text-[#007AFF] font-semibold text-sm hover:opacity-75 transition-opacity"
+            className="w-9 h-9 rounded-full bg-black/5 dark:bg-white/10 text-[#1C1C1E] dark:text-white flex items-center justify-center transition-colors hover:bg-black/10 dark:hover:bg-white/20"
           >
-            Batal
+            <X className="w-4 h-4" />
           </button>
-          <h2 className="text-base font-bold text-[#1C1C1E] dark:text-white font-google">
-            {taskToEdit ? 'Edit Tugas & Job' : 'Tugas / Catatan Baru'}
+          <h2 className="text-[15px] font-bold text-[#1C1C1E] dark:text-white font-google">
+            {taskToEdit ? 'Edit Tugas' : 'Tugas Baru'}
           </h2>
           <button
             type="button"
-            onClick={handleSubmit}
-            disabled={!title.trim()}
-            className="px-4 py-1.5 bg-[#007AFF] text-white font-bold text-xs rounded-full disabled:opacity-40 hover:bg-[#0062CC] shadow-md shadow-blue-500/25 active:scale-95 transition-all"
+            onClick={() => setPinned(!pinned)}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors ${
+              pinned ? 'bg-amber-100 dark:bg-amber-500/20 text-[#FF9500]' : 'bg-black/5 dark:bg-white/10 text-[#8E8E93]'
+            }`}
+            title={pinned ? 'Lepas Sematan' : 'Sematkan'}
           >
-            Simpan
+            <Pin className="w-4 h-4" fill={pinned ? 'currentColor' : 'none'} />
           </button>
         </div>
 
         {/* Scrollable Form Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 text-sm text-[#1C1C1E] dark:text-white">
-          {/* Title & Description Note (Keep Style) */}
-          <div className="space-y-2.5">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 space-y-5 text-sm text-[#1C1C1E] dark:text-white">
+          {/* Title & Description */}
+          <div className="space-y-2">
             <input
               id="task-modal-title-input"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Judul Tugas atau Pekerjaan..."
-              className="w-full text-lg font-bold bg-transparent outline-none placeholder-[#8E8E93] text-[#1C1C1E] dark:text-white font-google"
+              placeholder="Judul Tugas..."
+              className="w-full text-xl font-extrabold bg-transparent outline-none placeholder-[#C7C7CC] text-[#1C1C1E] dark:text-white font-google tracking-tight"
               autoFocus
             />
             <textarea
               id="task-modal-desc-input"
-              rows={3}
+              rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tambahkan catatan detail, deskripsi pekerjaan, instruksi..."
-              className="w-full bg-white/60 dark:bg-[#2C2C2E]/60 p-3.5 rounded-2xl border border-black/5 dark:border-white/5 outline-none resize-none text-xs text-[#1C1C1E] dark:text-white placeholder-[#8E8E93] focus:border-[#007AFF]/50 transition-colors"
+              placeholder="Tambahkan deskripsi (opsional)..."
+              className="w-full bg-transparent outline-none resize-none text-[14px] text-[#8E8E93] placeholder-[#C7C7CC]"
             />
           </div>
 
-          {/* Project & Color Selector */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Project Picker */}
-            <div>
-              <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 flex items-center gap-1">
-                <FolderKanban className="w-3.5 h-3.5 text-blue-500" />
-                <span>Kategori / Proyek</span>
-              </label>
-              <select
-                id="task-modal-project-select"
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-white/60 dark:bg-[#2C2C2E]/60 text-xs font-semibold rounded-2xl outline-none text-[#1C1C1E] dark:text-white border border-black/5 dark:border-white/5 focus:border-[#007AFF]/50"
-              >
-                <option value="">Tanpa Proyek (Umum)</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Color Accent Picker */}
-            <div>
-              <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5">
-                Warna Catatan (Frosted Glass)
-              </label>
-              <div className="flex items-center gap-2 py-1.5 overflow-x-auto">
-                {COLOR_OPTIONS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => setColor(c.id)}
-                    className={`w-7 h-7 rounded-full ${c.class} flex items-center justify-center transition-transform ${
-                      color === c.id ? 'ring-2 ring-offset-2 ring-[#007AFF] scale-110 shadow-sm' : 'opacity-80 hover:opacity-100'
-                    }`}
-                    title={c.name}
-                  >
-                    {color === c.id && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Status Segmented Control */}
-          <div>
-            <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5">
-              Status Progres
-            </label>
-            <div className="grid grid-cols-4 gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl text-xs font-medium text-center">
-              {(
-                [
-                  { id: 'todo', label: 'To Do' },
-                  { id: 'in_progress', label: 'Berjalan' },
-                  { id: 'review', label: 'Review' },
-                  { id: 'done', label: 'Selesai' },
-                ] as const
-              ).map((st) => (
-                <button
-                  key={st.id}
-                  type="button"
-                  onClick={() => {
-                    setStatus(st.id);
-                    if (st.id === 'done') setProgress(100);
-                    if (st.id === 'todo' && progress === 100) setProgress(0);
-                  }}
-                  className={`py-1.5 px-2 rounded-xl transition-all ${
-                    status === st.id
-                      ? 'bg-white dark:bg-[#3A3A3C] text-[#007AFF] font-bold shadow-sm'
-                      : 'text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-white'
-                  }`}
-                >
-                  {st.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Real-time Progress Slider */}
-          <div className="p-4 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 rounded-[24px]">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#1C1C1E] dark:text-white mb-2">
-              <span className="flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-blue-500" />
-                <span>Persentase Kemajuan Real-time</span>
-              </span>
-              <span className="text-sm font-extrabold text-[#007AFF]">{progress}%</span>
-            </div>
-            <input
-              id="task-modal-progress-range"
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              value={progress}
-              onChange={(e) => {
-                const val = Number(e.target.value);
-                setProgress(val);
-                if (val === 100) setStatus('done');
-                else if (val > 0 && status === 'todo') setStatus('in_progress');
-                else if (val === 0 && status === 'done') setStatus('todo');
-              }}
-              className="w-full h-2 bg-black/10 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#007AFF]"
-            />
-          </div>
-
-          {/* Due Date, Time, Priority */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-emerald-500" />
-                <span>Tenggat Waktu</span>
+          {/* Meta Row: Tanggal / Waktu / Prioritas — simple bordered boxes */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="p-3 rounded-2xl border border-black/10 dark:border-white/10">
+              <label className="flex items-center gap-1 text-[10px] font-bold text-[#8E8E93] uppercase tracking-wide mb-1">
+                <Calendar className="w-3 h-3" />
+                <span>Tanggal</span>
               </label>
               <input
                 id="task-modal-date-input"
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 text-xs font-medium rounded-2xl outline-none"
+                className="w-full bg-transparent text-[12px] font-semibold outline-none"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5 flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-orange-500" />
-                <span>Jam (Opsional)</span>
+            <div className="p-3 rounded-2xl border border-black/10 dark:border-white/10">
+              <label className="flex items-center gap-1 text-[10px] font-bold text-[#8E8E93] uppercase tracking-wide mb-1">
+                <Clock className="w-3 h-3" />
+                <span>Waktu</span>
               </label>
               <input
                 id="task-modal-time-input"
                 type="time"
                 value={dueTime}
                 onChange={(e) => setDueTime(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 text-xs font-medium rounded-2xl outline-none"
+                className="w-full bg-transparent text-[12px] font-semibold outline-none"
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-[#8E8E93] mb-1.5">
+            <div className="p-3 rounded-2xl border border-black/10 dark:border-white/10">
+              <label className="block text-[10px] font-bold text-[#8E8E93] uppercase tracking-wide mb-1">
                 Prioritas
               </label>
               <select
                 id="task-modal-priority-select"
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as TaskPriority)}
-                className="w-full px-3 py-2.5 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 text-xs font-semibold rounded-2xl outline-none"
+                className="w-full bg-transparent text-[12px] font-semibold outline-none"
               >
                 <option value="low">Rendah</option>
                 <option value="medium">Sedang</option>
                 <option value="high">Tinggi</option>
-                <option value="urgent">Mendesak ⚠️</option>
+                <option value="urgent">Mendesak</option>
               </select>
             </div>
           </div>
 
-          {/* Subtasks (Checklist) */}
-          <div className="p-4 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 rounded-[24px] space-y-2.5">
-            <div className="flex items-center justify-between text-xs font-semibold text-[#1C1C1E] dark:text-white">
-              <span>Subtugas / Butir Checklist</span>
-              <span className="text-[11px] text-[#8E8E93] font-bold">
-                {subtasks.filter((s) => s.completed).length}/{subtasks.length} Selesai
-              </span>
+          {/* Project chips + color dot picker */}
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+              <button
+                type="button"
+                onClick={() => setProjectId('')}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  !projectId
+                    ? 'bg-[#1C1C1E] dark:bg-white text-white dark:text-[#1C1C1E]'
+                    : 'bg-black/5 dark:bg-white/10 text-[#8E8E93]'
+                }`}
+              >
+                <FolderKanban className="w-3.5 h-3.5" />
+                <span>Umum</span>
+              </button>
+              {projects.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setProjectId(p.id)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                    projectId === p.id
+                      ? 'bg-[#1C1C1E] dark:bg-white text-white dark:text-[#1C1C1E]'
+                      : 'bg-black/5 dark:bg-white/10 text-[#8E8E93]'
+                  }`}
+                >
+                  {p.name}
+                </button>
+              ))}
             </div>
 
-            {/* List of subtasks */}
-            <div className="space-y-1.5 max-h-36 overflow-y-auto">
+            <div className="flex items-center gap-2">
+              {COLOR_OPTIONS.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setColor(c.id)}
+                  className={`w-6 h-6 rounded-full ${c.class} transition-transform ${
+                    color === c.id ? 'ring-2 ring-offset-2 ring-[#007AFF] dark:ring-offset-[#1C1C1E] scale-110' : 'opacity-70'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Status Segmented Control */}
+          <div className="grid grid-cols-4 gap-1 p-1 bg-black/5 dark:bg-white/5 rounded-2xl text-xs font-medium text-center">
+            {STATUS_OPTIONS.map((st) => (
+              <button
+                key={st.id}
+                type="button"
+                onClick={() => handleStatusChange(st.id)}
+                className={`py-1.5 px-2 rounded-xl transition-all ${
+                  status === st.id
+                    ? 'bg-white dark:bg-[#3A3A3C] text-[#007AFF] font-bold shadow-sm'
+                    : 'text-[#8E8E93] hover:text-[#1C1C1E] dark:hover:text-white'
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Subtasks — plain list, no boxed background */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-[#8E8E93] uppercase tracking-wide">
+              <span>Subtugas</span>
+              {subtasks.length > 0 && (
+                <span>{subtasks.filter((s) => s.completed).length}/{subtasks.length}</span>
+              )}
+            </div>
+
+            <div className="space-y-1 max-h-40 overflow-y-auto">
               {subtasks.map((st) => (
                 <div
                   key={st.id}
-                  className="flex items-center gap-2 p-2 bg-white/80 dark:bg-[#1C1C1E]/80 backdrop-blur-sm rounded-xl text-xs border border-black/5 dark:border-white/5"
+                  className="flex items-center gap-2.5 py-2 border-b border-black/5 dark:border-white/5 text-sm"
                 >
                   <button
                     type="button"
                     onClick={() => handleToggleSubtask(st.id)}
-                    className={`w-4 h-4 rounded-full flex items-center justify-center border transition-colors ${
+                    className={`w-5 h-5 rounded-full flex items-center justify-center border-2 transition-colors flex-shrink-0 ${
                       st.completed
-                        ? 'bg-[#34C759] border-[#34C759] text-white'
-                        : 'border-[#8E8E93]'
+                        ? 'bg-[#FF9500] border-[#FF9500] text-white'
+                        : 'border-[#C7C7CC]'
                     }`}
                   >
                     {st.completed && <Check className="w-3 h-3 stroke-[3]" />}
                   </button>
                   <span
-                    className={`flex-1 truncate font-medium ${
+                    className={`flex-1 truncate ${
                       st.completed ? 'line-through text-[#8E8E93]' : ''
                     }`}
                   >
@@ -413,7 +362,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleRemoveSubtask(st.id)}
-                    className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-md transition-colors"
+                    className="p-1 text-[#C7C7CC] hover:text-rose-500 transition-colors flex-shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -421,8 +370,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               ))}
             </div>
 
-            {/* Add subtask field */}
-            <div className="flex items-center gap-2 mt-1.5">
+            <div className="flex items-center gap-2 pt-1">
               <input
                 type="text"
                 value={newSubtaskText}
@@ -433,80 +381,30 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     handleAddSubtask();
                   }
                 }}
-                placeholder="+ Tambahkan butir subtugas..."
-                className="flex-1 px-3.5 py-2 bg-white dark:bg-[#1C1C1E] border border-black/5 dark:border-white/5 text-xs rounded-xl outline-none"
+                placeholder="+ Tambah subtugas..."
+                className="flex-1 px-3.5 py-2 bg-black/5 dark:bg-white/5 text-xs rounded-xl outline-none"
               />
               <button
                 type="button"
                 onClick={handleAddSubtask}
-                className="px-3.5 py-2 bg-[#007AFF] text-white rounded-xl text-xs font-bold shadow-sm hover:bg-[#0062CC] transition-all"
+                className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-black/5 dark:bg-white/10 rounded-xl text-[#1C1C1E] dark:text-white transition-all"
               >
-                Tambah
+                <Plus className="w-4 h-4" />
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Tag & Pin Row */}
-          <div className="flex items-center justify-between gap-3 pt-2">
-            {/* Tags */}
-            <div className="flex-1">
-              <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-100/80 dark:bg-blue-900/40 text-[#007AFF] dark:text-blue-300 text-[11px] font-semibold border border-blue-200/50"
-                  >
-                    #{tag}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTag(tag)}
-                      className="hover:text-red-500 text-xs ml-0.5"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                  placeholder="Ketik tag lalu tekan enter..."
-                  className="px-3 py-1.5 text-xs bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 rounded-xl outline-none flex-1"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddTag}
-                  className="px-3 py-1.5 text-xs bg-[#8E8E93]/15 hover:bg-[#8E8E93]/25 rounded-xl font-bold transition-colors"
-                >
-                  + Tag
-                </button>
-              </div>
-            </div>
-
-            {/* Pin Toggle */}
-            <div className="flex items-center gap-2 pl-3 border-l border-black/10 dark:border-white/10">
-              <button
-                type="button"
-                onClick={() => setPinned(!pinned)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all ${
-                  pinned
-                    ? 'bg-amber-100/80 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-300 shadow-sm'
-                    : 'bg-black/5 dark:bg-[#2C2C2E] text-[#8E8E93]'
-                }`}
-              >
-                <Pin className={`w-3.5 h-3.5 ${pinned ? 'fill-current' : ''}`} />
-                <span>{pinned ? 'Disematkan' : 'Sematkan'}</span>
-              </button>
-            </div>
-          </div>
+        {/* Bottom: full-width action button */}
+        <div className="px-6 pt-2 pb-6 border-t border-black/5 dark:border-white/5">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!title.trim()}
+            className="w-full py-3.5 bg-[#1C1C1E] dark:bg-white text-white dark:text-[#1C1C1E] font-bold text-sm rounded-full disabled:opacity-40 active:scale-[0.98] transition-all"
+          >
+            {taskToEdit ? 'Simpan Perubahan' : 'Simpan Tugas'}
+          </button>
         </div>
       </motion.div>
     </div>

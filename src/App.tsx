@@ -36,6 +36,8 @@ import { CalendarView } from './components/CalendarView';
 import { TimelineKanbanView } from './components/TimelineKanbanView';
 import { ProjectsView } from './components/ProjectsView';
 import { QuickKeepBar } from './components/QuickKeepBar';
+import { DateStrip } from './components/DateStrip';
+import { ProjectCarousel } from './components/ProjectCarousel';
 import { AuthModal } from './components/AuthModal';
 
 import {
@@ -81,7 +83,8 @@ export default function App() {
   // Navigation & Filter States
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
   const [searchQuery, setSearchQuery] = useState('');
-  const [taskFilter, setTaskFilter] = useState<'all' | 'today' | 'in_progress' | 'done'>('all');
+  const [taskFilter, setTaskFilter] = useState<'all' | 'in_progress' | 'done'>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
 
   // Modal States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -229,7 +232,6 @@ export default function App() {
   };
 
   // Filter tasks for Today/Tasks tab
-  const todayDateStr = getTodayDate();
   const pendingTasksCount = tasks.filter((t) => t.status !== 'done').length;
 
   const searchedTasks = tasks.filter((t) => {
@@ -243,8 +245,11 @@ export default function App() {
     );
   });
 
-  const filteredTasks = searchedTasks.filter((t) => {
-    if (taskFilter === 'today') return t.due_date === todayDateStr;
+  // "Today" tab is scoped to the date selected in the DateStrip, then
+  // narrowed further by the status segmented control.
+  const dateScopedTasks = searchedTasks.filter((t) => t.due_date === selectedDate);
+
+  const filteredTasks = dateScopedTasks.filter((t) => {
     if (taskFilter === 'in_progress') return t.status === 'in_progress' || t.status === 'review';
     if (taskFilter === 'done') return t.status === 'done';
     return true;
@@ -252,6 +257,14 @@ export default function App() {
 
   const pinnedTasks = filteredTasks.filter((t) => t.pinned);
   const regularTasks = filteredTasks.filter((t) => !t.pinned);
+
+  // Count of non-done tasks per date, for the DateStrip's dot indicators.
+  const taskCountByDate: Record<string, number> = {};
+  tasks.forEach((t) => {
+    if (t.status !== 'done') {
+      taskCountByDate[t.due_date] = (taskCountByDate[t.due_date] || 0) + 1;
+    }
+  });
 
   // Tab Title & Subtitle helper
   const getHeaderInfo = () => {
@@ -329,55 +342,42 @@ export default function App() {
               transition={{ duration: 0.2 }}
               className="space-y-4 pb-24"
             >
-              {/* Google Keep Quick Input Bar */}
+              {/* Simple full-width quick add */}
               <QuickKeepBar
-                onQuickCreate={(partialTask) => {
-                  const newTask: Task = {
-                    id: `task-${Date.now()}`,
-                    title: partialTask.title || 'Tugas Baru',
-                    description: partialTask.description || '',
-                    project_id: partialTask.project_id,
-                    project_name: partialTask.project_name,
-                    status: 'todo',
-                    priority: 'medium',
-                    due_date: getTodayDate(),
-                    progress: 0,
-                    subtasks: [],
-                    tags: ['Tugas'],
-                    color: 'blue',
-                    pinned: false,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                  };
-                  handleSaveTask(newTask);
-                }}
                 onOpenFullModal={() => {
                   setTaskToEdit(null);
-                  setDefaultTaskDate(getTodayDate());
+                  setDefaultTaskDate(selectedDate);
                   setIsTaskModalOpen(true);
                 }}
+              />
+
+              {/* Date Strip — pick which day's tasks to view */}
+              <DateStrip
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                taskCountByDate={taskCountByDate}
+              />
+
+              {/* Project Progress Carousel */}
+              <ProjectCarousel
                 projects={projects}
+                tasks={tasks}
+                onSelectProject={() => setActiveTab('projects')}
               />
 
               {/* Segmented Filter Control */}
               <CupertinoSegmentedControl
                 options={[
-                  { id: 'all', label: 'Semua', badge: tasks.length },
-                  {
-                    id: 'today',
-                    label: 'Hari Ini',
-                    badge: tasks.filter((t) => t.due_date === todayDateStr && t.status !== 'done')
-                      .length,
-                  },
+                  { id: 'all', label: 'Semua', badge: dateScopedTasks.length },
                   {
                     id: 'in_progress',
                     label: 'Berjalan',
-                    badge: tasks.filter((t) => t.status === 'in_progress').length,
+                    badge: dateScopedTasks.filter((t) => t.status === 'in_progress').length,
                   },
                   {
                     id: 'done',
                     label: 'Selesai',
-                    badge: tasks.filter((t) => t.status === 'done').length,
+                    badge: dateScopedTasks.filter((t) => t.status === 'done').length,
                   },
                 ]}
                 value={taskFilter}
@@ -423,10 +423,10 @@ export default function App() {
                   <div className="py-12 text-center text-[#8E8E93] bg-white/50 dark:bg-[#1C1C1E]/50 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
                     <Inbox className="w-10 h-10 mx-auto text-[#C7C7CC] mb-2 stroke-1" />
                     <p className="text-sm font-semibold text-[#1C1C1E] dark:text-white">
-                      Belum Ada Tugas di Kategori Ini
+                      Belum Ada Tugas di Tanggal Ini
                     </p>
                     <p className="text-xs text-[#8E8E93] mt-1 max-w-xs mx-auto">
-                      Gunakan bar di atas atau tombol Tugas Baru untuk mencatat pekerjaan harian Anda.
+                      Pilih tanggal lain atau tekan tombol Buat Tugas Baru di atas.
                     </p>
                   </div>
                 ) : (
