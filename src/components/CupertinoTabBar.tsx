@@ -8,6 +8,7 @@ interface CupertinoTabBarProps {
   onQuickAdd: () => void;
   pendingCount: number;
   isAuthenticated: boolean;
+  pendingInvitesCount?: number;
 }
 
 export const CupertinoTabBar: React.FC<CupertinoTabBarProps> = ({
@@ -16,6 +17,7 @@ export const CupertinoTabBar: React.FC<CupertinoTabBarProps> = ({
   onQuickAdd,
   pendingCount,
   isAuthenticated,
+  pendingInvitesCount = 0,
 }) => {
   const tabs = [
     {
@@ -43,7 +45,8 @@ export const CupertinoTabBar: React.FC<CupertinoTabBarProps> = ({
       id: 'settings' as ActiveTab,
       label: 'Profil',
       icon: User,
-      indicator: isAuthenticated ? 'green' : 'gray',
+      badge: pendingInvitesCount > 0 ? pendingInvitesCount : undefined,
+      indicator: pendingInvitesCount > 0 ? undefined : isAuthenticated ? 'green' : 'gray',
     },
   ];
 

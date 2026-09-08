@@ -1,12 +1,93 @@
 rules_version = '2';
 
-// Every document lives under users/{uid}/... — a signed-in user may only
-// read/write their own subtree. No document outside users/{uid} is ever
-// touched by the app, so nothing else needs a rule.
+// Data lives in three places:
+//   users/{uid}/...              — private, owner-only (unchanged from before)
+//   workspaces/{id}               — a shared team; readable/writable by its members
+//   workspaces/{id}/tasks|projects — shared task/project data for that team
+//   invites/{workspaceId__email}  — pending team invitations, keyed so rules
+//                                    can look one up by path instead of a query
+//
+// No Cloud Functions are used (Firebase Spark/free plan) — invite
+// acceptance is enforced entirely by the rules below: a non-member may
+// update a workspace doc ONLY to append their own uid/email, and ONLY
+// while a matching invite with status 'pending' exists.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return isSignedIn() &&
+        request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.member_uids;
+    }
+
     match /users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.member_uids;
+
+      allow create: if isSignedIn()
+        && request.resource.data.owner_uid == request.auth.uid
+        && request.resource.data.member_uids == [request.auth.uid]
+        && request.resource.data.member_emails == [request.auth.token.email.lower()];
+
+      allow update: if isSignedIn()
+        && request.resource.data.owner_uid == resource.data.owner_uid
+        && (
+          // Existing members may edit workspace fields (e.g. rename),
+          // or remove themselves (leave) / other members.
+          request.auth.uid in resource.data.member_uids
+          ||
+          // Accepting an invite: a non-member may ONLY append their own
+          // uid + email, one at a time, while their invite is pending.
+          (
+            !(request.auth.uid in resource.data.member_uids) &&
+            request.resource.data.member_uids.hasAll(resource.data.member_uids) &&
+            request.resource.data.member_uids.size() == resource.data.member_uids.size() + 1 &&
+            request.auth.uid in request.resource.data.member_uids &&
+            request.resource.data.member_emails.hasAll(resource.data.member_emails) &&
+            request.resource.data.member_emails.size() == resource.data.member_emails.size() + 1 &&
+            request.resource.data.member_emails.hasAny([request.auth.token.email.lower()]) &&
+            request.resource.data.name == resource.data.name &&
+            get(/databases/$(database)/documents/invites/$(workspaceId + '__' + request.auth.token.email.lower())).data.status == 'pending'
+          )
+        );
+
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.owner_uid;
+
+      match /tasks/{taskId} {
+        allow read, write: if isWorkspaceMember(workspaceId);
+      }
+      match /projects/{projectId} {
+        allow read, write: if isWorkspaceMember(workspaceId);
+      }
+    }
+
+    match /invites/{inviteId} {
+      allow create: if isSignedIn()
+        && isWorkspaceMember(request.resource.data.workspace_id)
+        && request.resource.data.invited_by_uid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && inviteId == request.resource.data.workspace_id + '__' + request.resource.data.email;
+
+      allow read: if isSignedIn() && (
+        resource.data.email == request.auth.token.email.lower() ||
+        isWorkspaceMember(resource.data.workspace_id)
+      );
+
+      // The invitee may only flip their own pending invite to accepted/declined.
+      allow update: if isSignedIn()
+        && resource.data.email == request.auth.token.email.lower()
+        && resource.data.status == 'pending'
+        && request.resource.data.status in ['accepted', 'declined']
+        && request.resource.data.workspace_id == resource.data.workspace_id
+        && request.resource.data.email == resource.data.email;
+
+      allow delete: if isSignedIn() && isWorkspaceMember(resource.data.workspace_id);
     }
   }
 }

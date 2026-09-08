@@ -6,6 +6,8 @@ import {
   User,
   ActiveTab,
   TaskStatus,
+  Workspace,
+  Invite,
 } from './types';
 import {
   getStoredTasks,
@@ -19,6 +21,7 @@ import {
 } from './services/storage';
 import { db } from './services/firebase';
 import { useAuthSession } from './services/auth';
+import { listenMyWorkspaces, listenMyInvites } from './services/workspace';
 import {
   collection,
   doc,
@@ -38,6 +41,7 @@ import { ProjectsView } from './components/ProjectsView';
 import { QuickKeepBar } from './components/QuickKeepBar';
 import { DateStrip } from './components/DateStrip';
 import { ProjectCarousel } from './components/ProjectCarousel';
+import { TeamSection } from './components/TeamSection';
 import { AuthModal } from './components/AuthModal';
 
 import {
@@ -53,8 +57,9 @@ import {
   Moon,
   Sun,
   Palette,
-  Download,
   LogOut,
+  Users,
+  ArrowLeftCircle,
 } from 'lucide-react';
 
 export default function App() {
@@ -86,6 +91,21 @@ export default function App() {
   const [taskFilter, setTaskFilter] = useState<'all' | 'in_progress' | 'done'>('all');
   const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
 
+  // Collaboration: null = viewing personal (users/{uid}) data, else the id
+  // of a shared workspace whose tasks/projects subcollections are active.
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<Invite[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? localStorage.getItem('active_workspace_id') : null
+  );
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || null;
+
+  const handleSwitchWorkspace = (id: string | null) => {
+    setActiveWorkspaceId(id);
+    if (id) localStorage.setItem('active_workspace_id', id);
+    else localStorage.removeItem('active_workspace_id');
+  };
+
   // Modal States
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
@@ -114,32 +134,68 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Sync to local storage on changes — this is the offline mirror once logged in.
+  // Sync to local storage on changes — this is the offline mirror once logged
+  // in, but only for personal data; a shared workspace's tasks belong to the
+  // whole team, not this device's personal cache.
   useEffect(() => {
-    saveStoredTasks(tasks);
-  }, [tasks]);
+    if (!activeWorkspaceId) saveStoredTasks(tasks);
+  }, [tasks, activeWorkspaceId]);
 
   useEffect(() => {
-    saveStoredProjects(projects);
-  }, [projects]);
+    if (!activeWorkspaceId) saveStoredProjects(projects);
+  }, [projects, activeWorkspaceId]);
 
   useEffect(() => {
     if (isGuest) saveStoredUser(guestUser);
   }, [guestUser, isGuest]);
 
-  // Firestore realtime listeners, scoped to the logged-in user's own
-  // subcollections (users/{uid}/tasks, users/{uid}/projects). onSnapshot
-  // delivers the initial data AND every live update afterwards in one go —
-  // Firestore is the source of truth once logged in; local storage stays as
-  // an offline mirror (see the save effects above).
+  // Workspaces the signed-in user belongs to, plus any pending invites
+  // addressed to their email — both live. Guests can't collaborate.
+  useEffect(() => {
+    if (!currentUser) {
+      setWorkspaces([]);
+      setPendingInvites([]);
+      return;
+    }
+    const unsubWorkspaces = listenMyWorkspaces(currentUser.uid, setWorkspaces);
+    const unsubInvites = listenMyInvites(currentUser.email, setPendingInvites);
+    return () => {
+      unsubWorkspaces();
+      unsubInvites();
+    };
+  }, [currentUser?.uid, currentUser?.email]);
+
+  // Drop back to personal data if the active workspace disappears (deleted,
+  // or this user was removed from it) or the user signs out.
+  useEffect(() => {
+    if (!currentUser && activeWorkspaceId) {
+      handleSwitchWorkspace(null);
+      return;
+    }
+    if (activeWorkspaceId && workspaces.length > 0 && !workspaces.some((w) => w.id === activeWorkspaceId)) {
+      handleSwitchWorkspace(null);
+    }
+  }, [currentUser, workspaces, activeWorkspaceId]);
+
+  // Firestore realtime listeners for tasks/projects. Personal mode reads
+  // users/{uid}/tasks|projects; inside a workspace it reads
+  // workspaces/{id}/tasks|projects instead — same shape, different owner.
+  // onSnapshot delivers the initial data AND every live update afterwards.
   useEffect(() => {
     if (!db || !currentUser) return;
     const uid = currentUser.uid;
 
-    const unsubTasks = onSnapshot(collection(db, 'users', uid, 'tasks'), (snapshot) => {
+    const tasksRef = activeWorkspaceId
+      ? collection(db, 'workspaces', activeWorkspaceId, 'tasks')
+      : collection(db, 'users', uid, 'tasks');
+    const projectsRef = activeWorkspaceId
+      ? collection(db, 'workspaces', activeWorkspaceId, 'projects')
+      : collection(db, 'users', uid, 'projects');
+
+    const unsubTasks = onSnapshot(tasksRef, (snapshot) => {
       setTasks(snapshot.docs.map((d) => d.data() as Task));
     });
-    const unsubProjects = onSnapshot(collection(db, 'users', uid, 'projects'), (snapshot) => {
+    const unsubProjects = onSnapshot(projectsRef, (snapshot) => {
       setProjects(snapshot.docs.map((d) => d.data() as Project));
     });
 
@@ -147,40 +203,55 @@ export default function App() {
       unsubTasks();
       unsubProjects();
     };
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid, activeWorkspaceId]);
+
+  // Doc refs resolve to the active workspace's subcollection when one is
+  // selected, else the signed-in user's own personal subcollection.
+  const taskDocRef = (taskId: string) =>
+    db && currentUser
+      ? activeWorkspaceId
+        ? doc(db, 'workspaces', activeWorkspaceId, 'tasks', taskId)
+        : doc(db, 'users', currentUser.uid, 'tasks', taskId)
+      : null;
+
+  const projectDocRef = (projectId: string) =>
+    db && currentUser
+      ? activeWorkspaceId
+        ? doc(db, 'workspaces', activeWorkspaceId, 'projects', projectId)
+        : doc(db, 'users', currentUser.uid, 'projects', projectId)
+      : null;
 
   // Task Actions — push to Firestore only when logged in; in guest mode this
   // is byte-for-byte the original local-only behavior.
   const handleSaveTask = async (task: Task) => {
+    const taskWithAuthor = activeWorkspaceId && currentUser ? { ...task, created_by: currentUser.uid } : task;
+
     setTasks((prev) => {
-      const index = prev.findIndex((t) => t.id === task.id);
+      const index = prev.findIndex((t) => t.id === taskWithAuthor.id);
       if (index >= 0) {
         const copy = [...prev];
-        copy[index] = task;
+        copy[index] = taskWithAuthor;
         return copy;
       }
-      return [task, ...prev];
+      return [taskWithAuthor, ...prev];
     });
 
-    if (db && currentUser) {
-      setDoc(doc(db, 'users', currentUser.uid, 'tasks', task.id), task);
-    }
+    const ref = taskDocRef(taskWithAuthor.id);
+    if (ref) setDoc(ref, taskWithAuthor);
   };
 
   const handleUpdateTask = (updatedTask: Task) => {
     setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
 
-    if (db && currentUser) {
-      setDoc(doc(db, 'users', currentUser.uid, 'tasks', updatedTask.id), updatedTask);
-    }
+    const ref = taskDocRef(updatedTask.id);
+    if (ref) setDoc(ref, updatedTask);
   };
 
   const handleDeleteTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
-    if (db && currentUser) {
-      deleteDoc(doc(db, 'users', currentUser.uid, 'tasks', taskId));
-    }
+    const ref = taskDocRef(taskId);
+    if (ref) deleteDoc(ref);
   };
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
@@ -200,35 +271,24 @@ export default function App() {
 
   // Project Actions — same session-gated pattern as tasks above.
   const handleAddProject = (project: Project) => {
-    setProjects((prev) => [project, ...prev]);
-    if (db && currentUser) {
-      setDoc(doc(db, 'users', currentUser.uid, 'projects', project.id), project);
-    }
+    const projectWithAuthor =
+      activeWorkspaceId && currentUser ? { ...project, created_by: currentUser.uid } : project;
+
+    setProjects((prev) => [projectWithAuthor, ...prev]);
+    const ref = projectDocRef(projectWithAuthor.id);
+    if (ref) setDoc(ref, projectWithAuthor);
   };
 
   const handleUpdateProject = (updatedProj: Project) => {
     setProjects((prev) => prev.map((p) => (p.id === updatedProj.id ? updatedProj : p)));
-    if (db && currentUser) {
-      setDoc(doc(db, 'users', currentUser.uid, 'projects', updatedProj.id), updatedProj);
-    }
+    const ref = projectDocRef(updatedProj.id);
+    if (ref) setDoc(ref, updatedProj);
   };
 
   const handleDeleteProject = (projectId: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
-    if (db && currentUser) {
-      deleteDoc(doc(db, 'users', currentUser.uid, 'projects', projectId));
-    }
-  };
-
-  const handleExportJSON = () => {
-    const backupData = { exported_at: new Date().toISOString(), tasks, projects };
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const downloadUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `timeline_tasks_backup_${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(downloadUrl);
+    const ref = projectDocRef(projectId);
+    if (ref) deleteDoc(ref);
   };
 
   // Filter tasks for Today/Tasks tab
@@ -332,6 +392,23 @@ export default function App() {
 
       {/* Main Content View with Smooth Spring Transitions */}
       <main className="relative z-10 flex-1 w-full max-w-lg mx-auto px-4 pt-3 pb-safe">
+        {/* Active workspace context banner */}
+        {activeWorkspace && activeTab !== 'settings' && (
+          <button
+            onClick={() => handleSwitchWorkspace(null)}
+            className="w-full flex items-center justify-between gap-2 mb-3 px-4 py-2.5 rounded-2xl bg-[#007AFF]/10 border border-[#007AFF]/20 text-[#007AFF] text-xs font-bold transition-all active:scale-[0.98]"
+          >
+            <span className="flex items-center gap-1.5 truncate">
+              <Users className="w-3.5 h-3.5 flex-shrink-0" />
+              <span className="truncate">Tim: {activeWorkspace.name}</span>
+            </span>
+            <span className="flex items-center gap-1 flex-shrink-0 text-[#8E8E93]">
+              <ArrowLeftCircle className="w-3.5 h-3.5" />
+              <span>Pribadi</span>
+            </span>
+          </button>
+        )}
+
         <AnimatePresence mode="wait">
           {activeTab === 'today' && (
             <motion.div
@@ -662,32 +739,33 @@ export default function App() {
                 </div>
               )}
 
-              {/* iOS Inset Group 3: Statistics & App Info */}
+              {/* iOS Inset Group 3: Statistics */}
               <div className="cupertino-grouped-list p-4 space-y-2 text-xs">
                 <h4 className="font-bold text-[#1C1C1E] dark:text-white font-google text-xs uppercase tracking-wider text-[#8E8E93] mb-1">
-                  Informasi Sistem & Statistik
+                  Statistik
                 </h4>
                 <div className="flex justify-between py-2 border-b border-black/5 dark:border-white/5 text-[#8E8E93]">
                   <span>Total Tugas Tersimpan</span>
                   <span className="font-bold text-[#1C1C1E] dark:text-white">{tasks.length} item</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-black/5 dark:border-white/5 text-[#8E8E93]">
+                <div className="flex justify-between py-2 text-[#8E8E93]">
                   <span>Total Proyek Aktif</span>
                   <span className="font-bold text-[#1C1C1E] dark:text-white">{projects.length} proyek</span>
                 </div>
-                <div className="flex justify-between py-2 border-b border-black/5 dark:border-white/5 text-[#8E8E93]">
-                  <span>Desain UI/UX & Tipografi</span>
-                  <span className="font-bold text-[#007AFF]">iOS Cupertino + Google Sans</span>
-                </div>
-
-                <button
-                  onClick={handleExportJSON}
-                  className="w-full mt-1 py-2.5 bg-[#F2F2F7] dark:bg-[#2C2C2E] hover:bg-black/5 dark:hover:bg-white/10 text-[#1C1C1E] dark:text-white rounded-full text-xs font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Unduh Cadangan Data (JSON)</span>
-                </button>
               </div>
+
+              {/* Team collaboration — requires a real account (needs an email to invite by) */}
+              {!isGuest && currentUser && (
+                <TeamSection
+                  currentUserUid={currentUser.uid}
+                  currentUserEmail={currentUser.email || ''}
+                  currentUserName={user.full_name}
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
+                  onSwitchWorkspace={handleSwitchWorkspace}
+                  incomingInvites={pendingInvites}
+                />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -704,6 +782,7 @@ export default function App() {
         }}
         pendingCount={pendingTasksCount}
         isAuthenticated={!isGuest}
+        pendingInvitesCount={pendingInvites.length}
       />
 
       {/* Modals */}
