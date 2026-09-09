@@ -237,21 +237,21 @@ export default function App() {
     });
 
     const ref = taskDocRef(taskWithAuthor.id);
-    if (ref) setDoc(ref, taskWithAuthor);
+    if (ref) setDoc(ref, taskWithAuthor).catch((err) => console.error('Gagal menyimpan tugas ke Firestore:', err));
   };
 
   const handleUpdateTask = (updatedTask: Task) => {
     setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)));
 
     const ref = taskDocRef(updatedTask.id);
-    if (ref) setDoc(ref, updatedTask);
+    if (ref) setDoc(ref, updatedTask).catch((err) => console.error('Gagal memperbarui tugas di Firestore:', err));
   };
 
   const handleDeleteTask = (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
     const ref = taskDocRef(taskId);
-    if (ref) deleteDoc(ref);
+    if (ref) deleteDoc(ref).catch((err) => console.error('Gagal menghapus tugas di Firestore:', err));
   };
 
   const handleStatusChange = (taskId: string, newStatus: TaskStatus) => {
@@ -276,19 +276,19 @@ export default function App() {
 
     setProjects((prev) => [projectWithAuthor, ...prev]);
     const ref = projectDocRef(projectWithAuthor.id);
-    if (ref) setDoc(ref, projectWithAuthor);
+    if (ref) setDoc(ref, projectWithAuthor).catch((err) => console.error('Gagal menyimpan proyek ke Firestore:', err));
   };
 
   const handleUpdateProject = (updatedProj: Project) => {
     setProjects((prev) => prev.map((p) => (p.id === updatedProj.id ? updatedProj : p)));
     const ref = projectDocRef(updatedProj.id);
-    if (ref) setDoc(ref, updatedProj);
+    if (ref) setDoc(ref, updatedProj).catch((err) => console.error('Gagal memperbarui proyek di Firestore:', err));
   };
 
   const handleDeleteProject = (projectId: string) => {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
     const ref = projectDocRef(projectId);
-    if (ref) deleteDoc(ref);
+    if (ref) deleteDoc(ref).catch((err) => console.error('Gagal menghapus proyek di Firestore:', err));
   };
 
   // Filter tasks for Today/Tasks tab

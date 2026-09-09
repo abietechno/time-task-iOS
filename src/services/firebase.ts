@@ -1,6 +1,6 @@
 import { initializeApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeFirestore, Firestore } from 'firebase/firestore';
 
 const config = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY as string | undefined,
@@ -23,5 +23,13 @@ export let db: Firestore | null = null;
 if (isFirebaseConfigured) {
   app = initializeApp(config);
   auth = getAuth(app);
-  db = getFirestore(app);
+  // Optional fields across the app (project_id, project_name, client, ...)
+  // are routinely built with `value || undefined` — Firestore's default
+  // setDoc() throws a client-side error on any `undefined` field instead of
+  // just omitting it, and that throw was silently swallowed wherever a
+  // write wasn't awaited/caught, so the task/project never actually made it
+  // to Firestore even though local state looked fine. Ignoring undefined
+  // properties makes the SDK drop those fields instead of rejecting the
+  // whole write.
+  db = initializeFirestore(app, { ignoreUndefinedProperties: true });
 }
