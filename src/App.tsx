@@ -21,6 +21,7 @@ import {
 } from './services/storage';
 import { db } from './services/firebase';
 import { useAuthSession } from './services/auth';
+import { purgeLegacyDemoData } from './services/migration';
 import { listenMyWorkspaces, listenMyInvites } from './services/workspace';
 import {
   collection,
@@ -148,6 +149,13 @@ export default function App() {
   useEffect(() => {
     if (isGuest) saveStoredUser(guestUser);
   }, [guestUser, isGuest]);
+
+  // One-time cleanup: delete the old hardcoded demo tasks/projects if this
+  // account already had them migrated in from a browser whose localStorage
+  // still carried the pre-cleanup demo seed (see storage.ts).
+  useEffect(() => {
+    if (currentUser) purgeLegacyDemoData(currentUser.uid).catch((err) => console.error('Gagal membersihkan data demo lama:', err));
+  }, [currentUser?.uid]);
 
   // Workspaces the signed-in user belongs to, plus any pending invites
   // addressed to their email — both live. Guests can't collaborate.

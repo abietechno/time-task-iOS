@@ -8,6 +8,14 @@ const STORAGE_KEYS = {
 
 const MIGRATION_FLAG_KEY = 'ios_timeline_migrated_v1';
 
+// IDs of the old hardcoded demo tasks/projects (removed from storage.ts, but
+// a browser that loaded the app before that removal may still have them
+// sitting in localStorage). Filtered out on every read so they can never be
+// displayed, or worse, swept up by the guest→account migration and pushed
+// into a brand-new account that signs in on that same device.
+const LEGACY_DUMMY_TASK_IDS = new Set(['task-1', 'task-2', 'task-3', 'task-4', 'task-5']);
+const LEGACY_DUMMY_PROJECT_IDS = new Set(['proj-1', 'proj-2', 'proj-3']);
+
 // Helper: Format today as YYYY-MM-DD
 export const getTodayDate = (): string => {
   const d = new Date();
@@ -39,7 +47,13 @@ export const INITIAL_USER: User = {
 export const getStoredTasks = (): Task[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.TASKS);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed: Task[] = JSON.parse(raw);
+    const cleaned = parsed.filter((t) => !LEGACY_DUMMY_TASK_IDS.has(t.id));
+    if (cleaned.length !== parsed.length) {
+      saveStoredTasks(cleaned);
+    }
+    return cleaned;
   } catch (e) {
     console.error('Failed to parse stored tasks', e);
     return [];
@@ -53,7 +67,13 @@ export const saveStoredTasks = (tasks: Task[]): void => {
 export const getStoredProjects = (): Project[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed: Project[] = JSON.parse(raw);
+    const cleaned = parsed.filter((p) => !LEGACY_DUMMY_PROJECT_IDS.has(p.id));
+    if (cleaned.length !== parsed.length) {
+      saveStoredProjects(cleaned);
+    }
+    return cleaned;
   } catch (e) {
     console.error('Failed to parse stored projects', e);
     return [];

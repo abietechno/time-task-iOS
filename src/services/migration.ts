@@ -4,6 +4,32 @@ import type { Task, Project } from '../types';
 
 const MIGRATION_FLAG_KEY = 'ios_timeline_migrated_v1';
 
+// Same legacy demo IDs storage.ts now filters out of localStorage — kept
+// here too because any account that signed in before that filter existed
+// may already have had them migrated straight into its real
+// users/{uid}/tasks|projects documents in Firestore. Deleting a
+// non-existent doc is a harmless no-op, so this is safe to run
+// unconditionally on every login.
+const LEGACY_DUMMY_TASK_IDS = ['task-1', 'task-2', 'task-3', 'task-4', 'task-5'];
+const LEGACY_DUMMY_PROJECT_IDS = ['proj-1', 'proj-2', 'proj-3'];
+
+/**
+ * Deletes the old hardcoded demo tasks/projects from a signed-in user's
+ * personal Firestore data, in case they were already migrated in before
+ * the demo-seed removal + localStorage filter existed.
+ */
+export async function purgeLegacyDemoData(userId: string): Promise<void> {
+  if (!db) return;
+  const batch = writeBatch(db);
+  for (const id of LEGACY_DUMMY_TASK_IDS) {
+    batch.delete(doc(db, 'users', userId, 'tasks', id));
+  }
+  for (const id of LEGACY_DUMMY_PROJECT_IDS) {
+    batch.delete(doc(db, 'users', userId, 'projects', id));
+  }
+  await batch.commit();
+}
+
 export interface MigrationResult {
   taskCount: number;
   projectCount: number;
