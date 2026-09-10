@@ -22,7 +22,7 @@ import {
 import { db } from './services/firebase';
 import { useAuthSession } from './services/auth';
 import { purgeLegacyDemoData } from './services/migration';
-import { listenMyWorkspaces, listenMyInvites } from './services/workspace';
+import { listenMyWorkspaces, listenMyInvites, moveProjectToWorkspace } from './services/workspace';
 import {
   collection,
   doc,
@@ -297,6 +297,22 @@ export default function App() {
     setProjects((prev) => prev.filter((p) => p.id !== projectId));
     const ref = projectDocRef(projectId);
     if (ref) deleteDoc(ref).catch((err) => console.error('Gagal menghapus proyek di Firestore:', err));
+  };
+
+  // Moves a personal project (created before any team existed, or before it
+  // was made active) into a shared workspace so invited teammates can see it.
+  // Only meaningful from personal mode — a project already inside a
+  // workspace is already visible to that workspace's members.
+  const handleMoveProjectToWorkspace = async (project: Project, workspaceId: string) => {
+    if (!currentUser || !db || activeWorkspaceId) return;
+    const projectTasks = tasks.filter((t) => t.project_id === project.id);
+    try {
+      await moveProjectToWorkspace(currentUser.uid, workspaceId, project, projectTasks);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      setTasks((prev) => prev.filter((t) => t.project_id !== project.id));
+    } catch (err) {
+      console.error('Gagal memindahkan proyek ke tim:', err);
+    }
   };
 
   // Filter tasks for Today/Tasks tab
@@ -605,6 +621,8 @@ export default function App() {
                 onSelectProjectFilter={(projId) => {
                   setActiveTab('timeline');
                 }}
+                workspaces={activeWorkspaceId ? [] : workspaces}
+                onMoveProjectToWorkspace={handleMoveProjectToWorkspace}
               />
             </motion.div>
           )}

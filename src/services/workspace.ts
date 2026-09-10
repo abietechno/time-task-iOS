@@ -14,7 +14,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import type { Workspace, Invite } from '../types';
+import type { Workspace, Invite, Project, Task } from '../types';
 
 function assertDb() {
   if (!db) throw new Error('Firebase belum dikonfigurasi.');
@@ -125,6 +125,36 @@ export async function leaveWorkspace(workspaceId: string, uid: string, email: st
     member_uids: arrayRemove(uid),
     member_emails: arrayRemove(email.toLowerCase()),
   });
+}
+
+/** Moves a project (and its tasks) out of the signed-in user's personal
+ * users/{uid} subtree into a shared workspace, so teammates invited after
+ * the fact can actually see it — inviting someone does NOT retroactively
+ * share whatever was already created in personal mode. */
+export async function moveProjectToWorkspace(
+  uid: string,
+  workspaceId: string,
+  project: Project,
+  tasks: Task[]
+): Promise<void> {
+  const database = assertDb();
+  const batch = writeBatch(database);
+
+  batch.set(doc(database, 'workspaces', workspaceId, 'projects', project.id), {
+    ...project,
+    created_by: uid,
+  });
+  batch.delete(doc(database, 'users', uid, 'projects', project.id));
+
+  tasks.forEach((task) => {
+    batch.set(doc(database, 'workspaces', workspaceId, 'tasks', task.id), {
+      ...task,
+      created_by: uid,
+    });
+    batch.delete(doc(database, 'users', uid, 'tasks', task.id));
+  });
+
+  await batch.commit();
 }
 
 /** Owner-only: deletes a workspace along with its tasks/projects subcollections. */

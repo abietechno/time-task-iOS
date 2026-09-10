@@ -11,9 +11,10 @@ import {
   ChevronRight,
   MoreVertical,
   Trash2,
-  Edit3
+  Edit3,
+  Users,
 } from 'lucide-react';
-import { Project, Task } from '../types';
+import { Project, Task, Workspace } from '../types';
 import { getTodayDate } from '../services/storage';
 
 interface ProjectsViewProps {
@@ -23,6 +24,10 @@ interface ProjectsViewProps {
   onUpdateProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
   onSelectProjectFilter: (projectId: string) => void;
+  /** Teams this project could be moved into — empty while already inside a
+   * workspace, or if the user has no teams yet. */
+  workspaces: Workspace[];
+  onMoveProjectToWorkspace: (project: Project, workspaceId: string) => void;
 }
 
 export const ProjectsView: React.FC<ProjectsViewProps> = ({
@@ -32,9 +37,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   onUpdateProject,
   onDeleteProject,
   onSelectProjectFilter,
+  workspaces,
+  onMoveProjectToWorkspace,
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
+  const [moveMenuProjectId, setMoveMenuProjectId] = useState<string | null>(null);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -101,7 +109,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
   const PROJECT_COLORS = ['#007AFF', '#34C759', '#AF52DE', '#FF9500', '#FF3B30', '#5856D6', '#FF2D55'];
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4 pb-24" onClick={() => setMoveMenuProjectId(null)}>
       {/* Header with Project Count & Add button */}
       <div className="flex items-center justify-between px-1">
         <div>
@@ -163,6 +171,49 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1">
+                  {workspaces.length > 0 && (
+                    <div className="relative">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMoveMenuProjectId((cur) => (cur === proj.id ? null : proj.id));
+                        }}
+                        className="p-2 text-[#8E8E93] hover:text-[#34C759] rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        title="Pindahkan ke Tim"
+                      >
+                        <Users className="w-4 h-4" />
+                      </button>
+
+                      {moveMenuProjectId === proj.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-full mt-1 z-20 w-52 py-1.5 rounded-2xl bg-white dark:bg-[#2C2C2E] shadow-xl border border-black/5 dark:border-white/10"
+                        >
+                          <div className="px-3.5 py-1.5 text-[10px] font-bold text-[#8E8E93] uppercase tracking-wide">
+                            Pindahkan ke Tim
+                          </div>
+                          {workspaces.map((w) => (
+                            <button
+                              key={w.id}
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Pindahkan proyek "${proj.name}" beserta tugasnya ke tim "${w.name}"? Proyek ini tidak akan lagi muncul di mode Pribadi.`
+                                  )
+                                ) {
+                                  onMoveProjectToWorkspace(proj, w.id);
+                                }
+                                setMoveMenuProjectId(null);
+                              }}
+                              className="w-full text-left px-3.5 py-2 text-xs font-medium text-[#1C1C1E] dark:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors truncate"
+                            >
+                              {w.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <button
                     onClick={(e) => handleOpenEdit(proj, e)}
                     className="p-2 text-[#8E8E93] hover:text-[#007AFF] rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
