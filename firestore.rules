@@ -18,6 +18,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Google accounts are pre-verified by Google, so their token's
+    // email_verified claim is already true. Email/password accounts start
+    // false until they confirm the link the app now sends on sign-up — this
+    // gate stops someone from registering with an email they don't own and
+    // using that unverified identity to accept a team invite meant for it.
+    function hasVerifiedEmail() {
+      return request.auth.token.email_verified == true;
+    }
+
     function isWorkspaceMember(workspaceId) {
       return isSignedIn() &&
         request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.member_uids;
@@ -46,6 +55,7 @@ service cloud.firestore {
           // uid + email, one at a time, while their invite is pending.
           (
             !(request.auth.uid in resource.data.member_uids) &&
+            hasVerifiedEmail() &&
             request.resource.data.member_uids.hasAll(resource.data.member_uids) &&
             request.resource.data.member_uids.size() == resource.data.member_uids.size() + 1 &&
             request.auth.uid in request.resource.data.member_uids &&
@@ -80,10 +90,13 @@ service cloud.firestore {
       );
 
       // The invitee may only flip their own pending invite to accepted/declined.
+      // Declining never grants access, so it's allowed either way; accepting
+      // requires a verified email, same reasoning as hasVerifiedEmail() above.
       allow update: if isSignedIn()
         && resource.data.email == request.auth.token.email.lower()
         && resource.data.status == 'pending'
         && request.resource.data.status in ['accepted', 'declined']
+        && (request.resource.data.status != 'accepted' || hasVerifiedEmail())
         && request.resource.data.workspace_id == resource.data.workspace_id
         && request.resource.data.email == resource.data.email;
 

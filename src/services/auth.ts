@@ -6,6 +6,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   signOut as firebaseSignOut,
+  sendEmailVerification,
   updateProfile,
   type User as FirebaseUser,
   type UserCredential,
@@ -45,7 +46,17 @@ export async function signUpWithEmail(
   if (!auth) throw new Error('Firebase belum dikonfigurasi.');
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(credential.user, { displayName: fullName });
+  // Anyone could otherwise register with someone else's email and, until
+  // they clicked a confirmation link, be treated by the rest of the app
+  // (and Firestore rules) as if they owned it — including accepting team
+  // invites addressed to that email. Gate that on real ownership.
+  await sendEmailVerification(credential.user);
   return credential;
+}
+
+/** Re-sends the verification link — used by the "belum dapat emailnya" retry button. */
+export async function resendVerificationEmail(user: FirebaseUser): Promise<void> {
+  await sendEmailVerification(user);
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<UserCredential> {

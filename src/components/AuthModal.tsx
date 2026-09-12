@@ -82,11 +82,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
         );
         const migrated = await migrateGuestDataToAccount(credential.user.uid, guestTasks, guestProjects);
         setSuccessMessage(
-          migrated
-            ? `Berhasil mendaftar! ${migrated.taskCount} tugas & ${migrated.projectCount} proyek disinkronkan ke cloud.`
-            : 'Berhasil mendaftar!'
+          `Akun dibuat! Cek email ${email.trim()} untuk link verifikasi sebelum bisa memakai aplikasi. ${
+            migrated ? `${migrated.taskCount} tugas & ${migrated.projectCount} proyek sudah disinkronkan ke cloud.` : ''
+          }`
         );
-        setTimeout(() => onClose(), 1200);
+        setTimeout(() => onClose(), 2200);
       } else {
         await signInWithEmail(email.trim(), password);
         setSuccessMessage('Berhasil masuk!');

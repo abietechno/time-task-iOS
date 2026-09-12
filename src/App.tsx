@@ -20,7 +20,7 @@ import {
   getTodayDate,
 } from './services/storage';
 import { db } from './services/firebase';
-import { useAuthSession } from './services/auth';
+import { useAuthSession, signOut, resendVerificationEmail, firebaseErrorMessage } from './services/auth';
 import { purgeLegacyDemoData } from './services/migration';
 import { listenMyWorkspaces, listenMyInvites, moveProjectToWorkspace } from './services/workspace';
 import {
@@ -61,12 +61,73 @@ import {
   LogOut,
   Users,
   ArrowLeftCircle,
+  MailCheck,
 } from 'lucide-react';
 
 export default function App() {
   // Auth: currentUser is null in guest mode, non-null once logged in.
   const { currentUser } = useAuthSession();
   const isGuest = !currentUser;
+
+  // Email/password accounts must verify ownership of the email before using
+  // the app — otherwise anyone could register with someone else's address
+  // and, e.g., accept team invites addressed to it. Google accounts are
+  // pre-verified by Google, so they're never gated here. `emailVerified` is
+  // tracked separately from `currentUser` because Firebase mutates the same
+  // User object in place on reload() — re-setting the identical reference
+  // wouldn't trigger a re-render, so the boolean needs its own state slot.
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [isCheckingVerification, setIsCheckingVerification] = useState(false);
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  const [verificationNotice, setVerificationNotice] = useState('');
+
+  useEffect(() => {
+    setEmailVerified(currentUser?.emailVerified ?? false);
+    setVerificationNotice('');
+  }, [currentUser]);
+
+  const needsEmailVerification =
+    !!currentUser && currentUser.providerData[0]?.providerId === 'password' && !emailVerified;
+
+  const handleRecheckVerification = async () => {
+    if (!currentUser) return;
+    setIsCheckingVerification(true);
+    setVerificationNotice('');
+    try {
+      await currentUser.reload();
+      // Force a fresh ID token so Firestore rules (which key off the
+      // email_verified claim baked into the token) see the update too —
+      // reload() alone only updates the local User object, not the token.
+      await currentUser.getIdToken(true);
+      setEmailVerified(currentUser.emailVerified);
+      if (!currentUser.emailVerified) {
+        setVerificationNotice('Belum terverifikasi. Cek inbox/folder spam, lalu klik link di emailnya.');
+      }
+    } catch (err) {
+      setVerificationNotice(firebaseErrorMessage(err));
+    } finally {
+      setIsCheckingVerification(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!currentUser) return;
+    setIsResendingVerification(true);
+    setVerificationNotice('');
+    try {
+      await resendVerificationEmail(currentUser);
+      setVerificationNotice('Email verifikasi baru sudah dikirim.');
+    } catch (err) {
+      setVerificationNotice(firebaseErrorMessage(err));
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+
+  const handleSignOutUnverified = async () => {
+    await signOut();
+    clearLocalMirror();
+  };
 
   // Global States
   const [tasks, setTasks] = useState<Task[]>(getStoredTasks);
@@ -277,6 +338,21 @@ export default function App() {
     );
   };
 
+  // Entry point for every "add task" trigger (header, quick-add bar, tab
+  // bar, timeline, calendar). Guests get sent to sign-in instead of the task
+  // form — tasks made without an account only ever live in this browser's
+  // localStorage, so we ask for an account (Google front and center) up
+  // front rather than letting the task get created and lost later.
+  const handleOpenNewTaskModal = (date: string = getTodayDate()) => {
+    if (isGuest) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    setTaskToEdit(null);
+    setDefaultTaskDate(date);
+    setIsTaskModalOpen(true);
+  };
+
   // Project Actions — same session-gated pattern as tasks above.
   const handleAddProject = (project: Project) => {
     const projectWithAuthor =
@@ -385,6 +461,53 @@ export default function App() {
 
   const headerInfo = getHeaderInfo();
 
+  // Blocks the whole app behind a verify-your-email wall for password
+  // accounts that haven't confirmed ownership of their email yet.
+  if (needsEmailVerification) {
+    return (
+      <div className="relative min-h-screen bg-[#F2F2F7] dark:bg-[#121214] text-[#1C1C1E] dark:text-white flex items-center justify-center p-6 font-sans">
+        <div className="w-full max-w-sm backdrop-blur-2xl bg-white/90 dark:bg-[#1C1C1E]/90 rounded-[32px] p-6 shadow-2xl border border-white/60 dark:border-white/10 space-y-4 text-center">
+          <div className="w-14 h-14 mx-auto rounded-2xl bg-[#007AFF]/15 text-[#007AFF] flex items-center justify-center">
+            <MailCheck className="w-7 h-7" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold font-google">Verifikasi Email Anda</h2>
+            <p className="text-xs text-[#8E8E93] mt-1.5 leading-relaxed">
+              Link verifikasi sudah dikirim ke{' '}
+              <span className="font-semibold text-[#1C1C1E] dark:text-white">{currentUser?.email}</span>. Buka
+              email itu, klik link-nya, lalu tekan tombol di bawah.
+            </p>
+          </div>
+
+          {verificationNotice && (
+            <p className="text-xs text-[#007AFF] font-medium">{verificationNotice}</p>
+          )}
+
+          <button
+            onClick={handleRecheckVerification}
+            disabled={isCheckingVerification}
+            className="w-full py-3 bg-[#007AFF] hover:bg-[#0062CC] text-white font-bold rounded-full shadow-md shadow-blue-500/25 transition-all active:scale-95 disabled:opacity-40 text-xs"
+          >
+            {isCheckingVerification ? 'Memeriksa...' : 'Saya Sudah Verifikasi'}
+          </button>
+          <button
+            onClick={handleResendVerification}
+            disabled={isResendingVerification}
+            className="w-full py-3 bg-black/5 dark:bg-white/10 text-[#1C1C1E] dark:text-white font-bold rounded-full transition-all active:scale-95 disabled:opacity-40 text-xs"
+          >
+            {isResendingVerification ? 'Mengirim...' : 'Kirim Ulang Email Verifikasi'}
+          </button>
+          <button
+            onClick={handleSignOutUnverified}
+            className="w-full py-2 text-rose-500 font-semibold text-xs"
+          >
+            Keluar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-[#F2F2F7] dark:bg-[#121214] text-[#1C1C1E] dark:text-white flex flex-col font-sans transition-colors overflow-x-hidden selection:bg-[#007AFF]/20">
       {/* Frosted Glass Ambient Lighting Layer */}
@@ -401,11 +524,7 @@ export default function App() {
           user={user}
           isGuest={isGuest}
           onOpenAuth={() => setIsAuthModalOpen(true)}
-          onQuickAdd={() => {
-            setTaskToEdit(null);
-            setDefaultTaskDate(getTodayDate());
-            setIsTaskModalOpen(true);
-          }}
+          onQuickAdd={() => handleOpenNewTaskModal()}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           showSearch={activeTab !== 'settings'}
@@ -444,13 +563,7 @@ export default function App() {
               className="space-y-4 pb-24"
             >
               {/* Simple full-width quick add */}
-              <QuickKeepBar
-                onOpenFullModal={() => {
-                  setTaskToEdit(null);
-                  setDefaultTaskDate(selectedDate);
-                  setIsTaskModalOpen(true);
-                }}
-              />
+              <QuickKeepBar onOpenFullModal={() => handleOpenNewTaskModal(selectedDate)} />
 
               {/* Date Strip — pick which day's tasks to view */}
               <DateStrip
@@ -569,11 +682,7 @@ export default function App() {
                 }}
                 onDeleteTask={handleDeleteTask}
                 onStatusChange={handleStatusChange}
-                onQuickAdd={(status) => {
-                  setTaskToEdit(null);
-                  setDefaultTaskDate(getTodayDate());
-                  setIsTaskModalOpen(true);
-                }}
+                onQuickAdd={() => handleOpenNewTaskModal()}
               />
             </motion.div>
           )}
@@ -595,11 +704,7 @@ export default function App() {
                 }}
                 onDeleteTask={handleDeleteTask}
                 onStatusChange={handleStatusChange}
-                onAddTaskOnDate={(dateStr) => {
-                  setTaskToEdit(null);
-                  setDefaultTaskDate(dateStr);
-                  setIsTaskModalOpen(true);
-                }}
+                onAddTaskOnDate={(dateStr) => handleOpenNewTaskModal(dateStr)}
               />
             </motion.div>
           )}
@@ -801,11 +906,7 @@ export default function App() {
       <CupertinoTabBar
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        onQuickAdd={() => {
-          setTaskToEdit(null);
-          setDefaultTaskDate(getTodayDate());
-          setIsTaskModalOpen(true);
-        }}
+        onQuickAdd={() => handleOpenNewTaskModal()}
         pendingCount={pendingTasksCount}
         isAuthenticated={!isGuest}
         pendingInvitesCount={pendingInvites.length}
