@@ -76,9 +76,7 @@ export const CupertinoHeader: React.FC<CupertinoHeaderProps> = ({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <span>
-                  {user.full_name ? user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'JD'}
-                </span>
+                <UserIcon className="w-4 h-4" />
               )}
               {!isGuest && (
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-blue-500 border-2 border-white dark:border-[#121214] rounded-full" />

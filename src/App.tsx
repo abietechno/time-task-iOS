@@ -42,7 +42,6 @@ import { CalendarView } from './components/CalendarView';
 import { TimelineKanbanView } from './components/TimelineKanbanView';
 import { ProjectsView } from './components/ProjectsView';
 import { QuickKeepBar } from './components/QuickKeepBar';
-import { DateStrip } from './components/DateStrip';
 import { ProjectCarousel } from './components/ProjectCarousel';
 import { TeamSection } from './components/TeamSection';
 import { AuthModal } from './components/AuthModal';
@@ -169,7 +168,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [taskFilter, setTaskFilter] = useState<'all' | 'in_progress' | 'done'>('all');
-  const [selectedDate, setSelectedDate] = useState<string>(getTodayDate());
+  // Fixed to today — picking a different day now lives solely in the
+  // Calendar tab, so this no longer needs to be stateful.
+  const selectedDate = getTodayDate();
 
   // Collaboration: null = viewing personal (users/{uid}) data, else the id
   // of a shared workspace whose tasks/projects subcollections are active.
@@ -423,8 +424,8 @@ export default function App() {
     );
   });
 
-  // "Today" tab is scoped to the date selected in the DateStrip, then
-  // narrowed further by the status segmented control.
+  // "Today" tab is scoped to today's date, then narrowed further by the
+  // status segmented control.
   const dateScopedTasks = searchedTasks.filter((t) => t.due_date === selectedDate);
 
   const filteredTasks = dateScopedTasks.filter((t) => {
@@ -436,20 +437,12 @@ export default function App() {
   const pinnedTasks = filteredTasks.filter((t) => t.pinned);
   const regularTasks = filteredTasks.filter((t) => !t.pinned);
 
-  // Count of non-done tasks per date, for the DateStrip's dot indicators.
-  const taskCountByDate: Record<string, number> = {};
-  tasks.forEach((t) => {
-    if (t.status !== 'done') {
-      taskCountByDate[t.due_date] = (taskCountByDate[t.due_date] || 0) + 1;
-    }
-  });
-
   // Tab Title & Subtitle helper
   const getHeaderInfo = () => {
     switch (activeTab) {
       case 'today':
         return {
-          title: 'Daftar Tugas',
+          title: `Hi, ${user.full_name.split(' ')[0]}`,
           subtitle: `${pendingTasksCount} pekerjaan aktif perlu diselesaikan`,
         };
       case 'timeline':
@@ -582,13 +575,6 @@ export default function App() {
             >
               {/* Simple full-width quick add */}
               <QuickKeepBar onOpenFullModal={() => handleOpenNewTaskModal(selectedDate)} />
-
-              {/* Date Strip — pick which day's tasks to view */}
-              <DateStrip
-                selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-                taskCountByDate={taskCountByDate}
-              />
 
               {/* Project Progress Carousel */}
               <ProjectCarousel
