@@ -67,7 +67,11 @@ import {
 
 export default function App() {
   // Auth: currentUser is null in guest mode, non-null once logged in.
-  const { currentUser } = useAuthSession();
+  // isAuthLoading is true only for the brief moment on page load while
+  // Firebase restores a previous session — currentUser is also null during
+  // that window, so anything that treats "no currentUser" as "signed out"
+  // must check isAuthLoading first or it'll misfire on every refresh.
+  const { currentUser, isLoading: isAuthLoading } = useAuthSession();
   const isGuest = !currentUser;
 
   // Email/password accounts must verify ownership of the email before using
@@ -254,8 +258,13 @@ export default function App() {
   }, [currentUser?.uid, currentUser?.email]);
 
   // Drop back to personal data if the active workspace disappears (deleted,
-  // or this user was removed from it) or the user signs out.
+  // or this user was removed from it) or the user signs out. Skipped while
+  // auth is still loading, since currentUser is null then too — without
+  // this guard, refreshing while a workspace was active reset it back to
+  // Pribadi on every page load, before Firebase even got to confirm the
+  // session was still signed in.
   useEffect(() => {
+    if (isAuthLoading) return;
     if (!currentUser && activeWorkspaceId) {
       handleSwitchWorkspace(null);
       return;
@@ -263,7 +272,7 @@ export default function App() {
     if (activeWorkspaceId && workspaces.length > 0 && !workspaces.some((w) => w.id === activeWorkspaceId)) {
       handleSwitchWorkspace(null);
     }
-  }, [currentUser, workspaces, activeWorkspaceId]);
+  }, [isAuthLoading, currentUser, workspaces, activeWorkspaceId]);
 
   // Firestore realtime listeners for tasks/projects. Personal mode reads
   // users/{uid}/tasks|projects; inside a workspace it reads
