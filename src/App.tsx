@@ -17,7 +17,9 @@ import {
   getStoredUser,
   saveStoredUser,
   clearLocalMirror,
+  clearGuestMigrationFlag,
   getTodayDate,
+  INITIAL_USER,
 } from './services/storage';
 import { db } from './services/firebase';
 import { useAuthSession, signOut, resendVerificationEmail, firebaseErrorMessage } from './services/auth';
@@ -124,9 +126,25 @@ export default function App() {
     }
   };
 
-  const handleSignOutUnverified = async () => {
+  // Single sign-out path for every "Keluar" button in the app (account
+  // preview card, the email-verification gate). Confirms first, then wipes
+  // both the persisted local mirror AND the in-memory state — without the
+  // in-memory reset, the just-signed-out account's tasks/projects/profile
+  // stayed on screen (and would get re-saved into the guest's localStorage
+  // slot by the sync effects below) until a manual page reload.
+  const handleSignOut = async () => {
+    if (!confirm('Anda yakin ingin logout? Anda akan kembali ke mode Tamu.')) return;
     await signOut();
     clearLocalMirror();
+    clearGuestMigrationFlag();
+    setTasks([]);
+    setProjects([]);
+    setGuestUser(INITIAL_USER);
+    handleSwitchWorkspace(null);
+    setWorkspaces([]);
+    setPendingInvites([]);
+    setActiveTab('today');
+    setIsAuthModalOpen(false);
   };
 
   // Global States
@@ -498,7 +516,7 @@ export default function App() {
             {isResendingVerification ? 'Mengirim...' : 'Kirim Ulang Email Verifikasi'}
           </button>
           <button
-            onClick={handleSignOutUnverified}
+            onClick={handleSignOut}
             className="w-full py-2 text-rose-500 font-semibold text-xs"
           >
             Keluar
@@ -927,6 +945,7 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         currentUser={user}
         isGuest={isGuest}
+        onSignOut={handleSignOut}
       />
     </div>
   );

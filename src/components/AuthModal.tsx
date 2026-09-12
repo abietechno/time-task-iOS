@@ -6,20 +6,22 @@ import {
   signUpWithEmail,
   signInWithEmail,
   signInWithGoogle,
-  signOut,
   firebaseErrorMessage,
 } from '../services/auth';
 import { migrateGuestDataToAccount } from '../services/migration';
-import { clearLocalMirror, getStoredTasks, getStoredProjects } from '../services/storage';
+import { getStoredTasks, getStoredProjects } from '../services/storage';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUser: User;
   isGuest: boolean;
+  /** Confirms with the user, then signs out and resets app state to a clean
+   * guest slate — owned by App.tsx since it's the one holding that state. */
+  onSignOut: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUser, isGuest }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUser, isGuest, onSignOut }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -99,12 +101,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
     }
   };
 
-  const handleSignOut = async () => {
-    await signOut();
-    clearLocalMirror();
-    onClose();
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/40 backdrop-blur-md">
       <motion.div
@@ -147,7 +143,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
             </div>
 
             <button
-              onClick={handleSignOut}
+              onClick={onSignOut}
               className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg text-xs flex items-center gap-1 font-semibold transition-colors"
               title="Keluar"
             >
