@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { User as UserIcon, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { User } from '../types';
 import {
   signUpWithEmail,
@@ -114,18 +114,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
         className="w-full max-w-sm backdrop-blur-2xl bg-white/90 dark:bg-[#1C1C1E]/90 rounded-[32px] p-6 shadow-2xl border border-white/60 dark:border-white/10 space-y-4"
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-[#007AFF]/15 text-[#007AFF] flex items-center justify-center border border-[#007AFF]/20">
-              <UserIcon className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-[#1C1C1E] dark:text-white font-google">
-                Akun Pengguna
-              </h3>
-              <p className="text-[11px] font-medium text-[#8E8E93]">Google & Email Login</p>
-            </div>
-          </div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold text-[#1C1C1E] dark:text-white font-google">
+            {isGuest ? (authMode === 'login' ? 'Masuk ke Akun' : 'Daftar Akun Baru') : 'Akun Saya'}
+          </h3>
 
           <button
             onClick={onClose}
@@ -135,25 +127,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
           </button>
         </div>
 
-        {/* Current logged in preview */}
-        <div className="p-3.5 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 rounded-[20px] flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
-              {currentUser.avatar_url ? (
-                <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                currentUser.full_name.charAt(0)
-              )}
+        {/* Logged-in account preview + sign out — not shown while still a guest */}
+        {!isGuest && (
+          <div className="p-3.5 bg-white/60 dark:bg-[#2C2C2E]/60 border border-black/5 dark:border-white/5 rounded-[20px] flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full overflow-hidden bg-blue-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                {currentUser.avatar_url ? (
+                  <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  currentUser.full_name.charAt(0)
+                )}
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-[#1C1C1E] dark:text-white">
+                  {currentUser.full_name}
+                </h4>
+                <p className="text-[11px] font-medium text-[#8E8E93]">{currentUser.email}</p>
+              </div>
             </div>
-            <div>
-              <h4 className="text-xs font-bold text-[#1C1C1E] dark:text-white">
-                {currentUser.full_name}
-              </h4>
-              <p className="text-[11px] font-medium text-[#8E8E93]">{currentUser.email}</p>
-            </div>
-          </div>
 
-          {!isGuest && (
             <button
               onClick={handleSignOut}
               className="p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg text-xs flex items-center gap-1 font-semibold transition-colors"
@@ -161,8 +153,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, currentUs
             >
               <LogOut className="w-3.5 h-3.5" />
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Google Sign-In + Email & Password Form — only shown while in guest mode */}
         {isGuest && (
